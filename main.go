@@ -12,6 +12,8 @@ import (
 	"github.com/shkh/lastfm-go/lastfm"
 )
 
+// For managing current games: https://github.com/patrickmn/go-cache
+
 var (
 	BotToken     = flag.String("token", "", "Bot access token")
 	LastFMKey    = flag.String("lastfm_key", "", "LastFM API key")

@@ -1,4 +1,4 @@
-package responses
+package deezer
 
 type Track struct {
 	ID             int64   `json:"id"`
