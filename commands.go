@@ -2,127 +2,58 @@ package main
 
 import (
 	"fmt"
+	"guess-the-song-discord/internal"
 	"log"
 
-	"guess-the-song-discord/internal/parsing"
+	"guess-the-song-discord/internal/commands"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/shkh/lastfm-go/lastfm"
 )
 
 var (
-	commands = []*discordgo.ApplicationCommand{
-		{
-			Name:        "top-tracks",
-			Description: "Starts a quiz using the top tracks of each user through Last.fm",
-			Type:        discordgo.ChatApplicationCommand,
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Name:        "users",
-					Description: "Space separated list of users to take part in quiz",
-					Type:        discordgo.ApplicationCommandOptionString,
-					Required:    true,
-				},
-				{
-					Name:        "period",
-					Description: "Period to take top tracks from (default: overall)",
-					Type:        discordgo.ApplicationCommandOptionString,
-					Choices: []*discordgo.ApplicationCommandOptionChoice{
-						{
-							Name:  "overall",
-							Value: "overall",
-						},
-						{
-							Name:  "Week",
-							Value: "7days",
-						},
-						{
-							Name:  "Month",
-							Value: "1month",
-						},
-						{
-							Name:  "3 Months",
-							Value: "3month",
-						},
-						{
-							Name:  "6 Months",
-							Value: "6month",
-						},
-						{
-							Name:  "Year",
-							Value: "12month",
-						},
-					},
-				},
-			},
-		},
+	commandList = []*discordgo.ApplicationCommand{
+		&commands.TopTrackCommand,
 	}
 )
 
-var registeredCommands = make([]*discordgo.ApplicationCommand, len(commands))
+var registeredCommands = make([]*discordgo.ApplicationCommand, len(commandList))
 
 var commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 	"top-tracks": topTracks,
 }
 
 func topTracks(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	guild, err := s.State.Guild(i.GuildID)
+	channel, err := internal.FindVoiceChat(s, i.GuildID, i.Member.User.ID)
 
 	if err != nil {
+		if err.Error() == "user not in voice channel" {
+			internal.CommandErrorResponse(s, i, "You must be inside a voice channel to start a quiz")
+			return
+		}
+
 		log.Println(err)
 		return
 	}
 
-	// Current voice channel for user
-	var channel string
+	options, err := commands.ParseTopTrackOptions(i.ApplicationCommandData().Options)
 
-	for _, vs := range guild.VoiceStates {
-		if vs.UserID == i.Member.User.ID {
-			channel = vs.ChannelID
-		}
-	}
-
-	if channel == "" {
-		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Must be in a voice channel to start quiz",
-			},
-		})
-
-		if err != nil {
-			log.Panicln(err.Error())
+	if err != nil {
+		if err.Error() == "no users" {
+			internal.CommandErrorResponse(s, i, "You must enter space separated Last.fm usernames to use for the quiz")
 		}
 
+		log.Println(err)
 		return
 	}
 
-	options := i.ApplicationCommandData().Options
+	fields := make([]*discordgo.MessageEmbedField, len(options.Users))
 
-	users, period, err := parsing.ParseTopTrackOptions(options)
-
-	if err != nil && err.Error() == "no users" {
-		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Users are required",
-			},
-		})
-
-		if err != nil {
-			log.Panicln(err.Error())
-		}
-
-		return
-	}
-
-	fields := make([]*discordgo.MessageEmbedField, len(users))
-
-	for i, user := range users {
+	for i, user := range options.Users {
 		tracks, err := lm.User.GetTopTracks(lastfm.P{
 			"user":   user,
 			"limit":  3,
-			"period": period,
+			"period": options.Period,
 		})
 		if err != nil {
 			log.Println(err)
@@ -135,7 +66,7 @@ func topTracks(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 		fields[i] = &discordgo.MessageEmbedField{
 			Name: user,
-			Value: fmt.Sprintf("%s - %s, %s - %s, %s - %s, ...",
+			Value: fmt.Sprintf("1. %s - %s,\n 2. %s - %s,\n 3. %s - %s,\n 4. ...",
 				tracks.Tracks[0].Name,
 				tracks.Tracks[0].Artist.Name,
 				tracks.Tracks[1].Name,
@@ -153,8 +84,9 @@ func topTracks(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				{
 					Title: "Top Tracks Quiz",
 					Description: fmt.Sprintf("Starts a top tracks quiz using the provided users with \n"+
-						"- period %s\n"+
-						"- channel ID %s", period, i.ChannelID),
+						"- Period %s\n"+
+						"- Text Channel %s\n"+
+						"- Voice Channel: %s", options.Period, i.ChannelID, *channel),
 					Fields: fields,
 				},
 			},
@@ -178,7 +110,7 @@ func initCommandListener() {
 func registerCommands() {
 	fmt.Println("Registering commands...")
 
-	for i, command := range commands {
+	for i, command := range commandList {
 		cmd, err := s.ApplicationCommandCreate(s.State.User.ID, *GuildID, command)
 		if err != nil {
 			log.Panicf("Failed to create %v command: %v", command.Name, err)
