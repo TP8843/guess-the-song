@@ -46,8 +46,6 @@ func init() {
 }
 
 func main() {
-	s.AddHandler(test)
-
 	s.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
 
 	err := s.Open()
@@ -74,30 +72,5 @@ func main() {
 
 	if err != nil {
 		fmt.Println("error closing Discord session,", err)
-	}
-}
-
-func test(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Ignore all messages created by the bot itself
-	if m.Author.ID == s.State.User.ID {
-		return
-	}
-
-	// If the message is "ping" reply with "Pong!"
-	if m.Content == "ping" {
-		_, err := s.ChannelMessageSend(m.ChannelID, "Pong!")
-		if err != nil {
-			fmt.Println("error sending message,", err)
-			return
-		}
-	}
-
-	// If the message is "pong" reply with "Ping!"
-	if m.Content == "pong" {
-		_, err := s.ChannelMessageSend(m.ChannelID, "Ping!")
-		if err != nil {
-			fmt.Println("error sending message,", err)
-			return
-		}
 	}
 }
