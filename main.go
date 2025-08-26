@@ -13,6 +13,7 @@ import (
 )
 
 // For managing current games: https://github.com/patrickmn/go-cache
+// For taking .mp3 from internet and converting to dca: https://github.com/jogramming/dca
 
 var (
 	BotToken     = flag.String("token", "", "Bot access token")
