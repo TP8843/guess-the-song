@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"guess-the-song-discord/internal"
+	"guess-the-song-discord/internal/deezer"
 	"log"
 	"strings"
 
@@ -126,11 +127,20 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 			continue
 		}
 
+		deezerResponse, err := deezer.Search(tracks.Tracks[0].Name, tracks.Tracks[0].Artist.Name)
+		var deezerPreview string
+		if err != nil {
+			log.Println(err)
+		} else {
+			deezerPreview = deezerResponse.Preview
+		}
+
 		fields[i] = &discordgo.MessageEmbedField{
 			Name: user,
-			Value: fmt.Sprintf("1. %s - %s,\n 2. %s - %s,\n 3. %s - %s,\n 4. ...",
+			Value: fmt.Sprintf("1. %s - %s (%s),\n 2. %s - %s,\n 3. %s - %s,\n 4. ...",
 				tracks.Tracks[0].Name,
 				tracks.Tracks[0].Artist.Name,
+				deezerPreview,
 				tracks.Tracks[1].Name,
 				tracks.Tracks[1].Artist.Name,
 				tracks.Tracks[2].Name,

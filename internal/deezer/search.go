@@ -1,5 +1,21 @@
 package deezer
 
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
+)
+
+type TrackSearchResponse struct {
+	Data  []Track `json:"data"`
+	Total int     `json:"total"`
+	Next  string  `json:"next"`
+}
+
 type Track struct {
 	ID             int64   `json:"id"`
 	Title          string  `json:"title"`
@@ -50,4 +66,56 @@ type Artist struct {
 	Radio         bool   `json:"radio"`
 	Tracklist     string `json:"tracklist"`
 	Type          string `json:"type"`
+}
+
+func Search(trackName string, artist string) (*Track, error) {
+	trackNameEncoded := url.QueryEscape(trackName)
+	artistEncoded := url.QueryEscape(artist)
+
+	searchParams := fmt.Sprintf("track:\"%s\" artist:\"%s\"", trackNameEncoded, artistEncoded)
+
+	req, err := http.NewRequest("GET", "https://api.deezer.com/search/track", nil)
+	if err != nil {
+		log.Println(err)
+		return nil, errors.New("error creating request")
+	}
+
+	q := req.URL.Query()
+	q.Add("q", searchParams)
+	q.Add("limit", "1")
+
+	req.URL.RawQuery = q.Encode()
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("error getting deezer track, ", err)
+
+		return nil, errors.New("error getting track from deezer")
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("error closing deezer request body, ", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		log.Println("non 200 status code getting deezer track, ", resp.StatusCode)
+
+		data, _ := io.ReadAll(resp.Body)
+		fmt.Println(string(data))
+
+		return nil, errors.New("error getting track from deezer")
+	}
+
+	responseBody := TrackSearchResponse{}
+	err = json.NewDecoder(resp.Body).Decode(&responseBody)
+	if err != nil {
+		log.Println("error decoding deezer response, ", err)
+		return nil, errors.New("error getting track from deezer")
+	}
+
+	return &responseBody.Data[0], nil
 }
