@@ -25,22 +25,22 @@ func CommandErrorResponse(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	}
 }
 
-func FindVoiceChat(s *discordgo.Session, guildId string, userId string) (channel *string, err error) {
+func FindVoiceChat(s *discordgo.Session, guildId string, userId string) (channel string, err error) {
 	guild, err := s.State.Guild(guildId)
 
 	if err != nil {
 		log.Println(err)
-		return nil, errors.New("no guild found")
+		return "", errors.New("no guild found")
 	}
 
 	for _, vs := range guild.VoiceStates {
 		if vs.UserID == userId {
-			channel = &vs.ChannelID
+			channel = vs.ChannelID
 		}
 	}
 
-	if channel == nil {
-		return nil, errors.New("user not in voice channel")
+	if channel == "" {
+		return "", errors.New("user not in voice channel")
 	}
 
 	return channel, nil

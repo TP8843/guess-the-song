@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"guess-the-song-discord/internal"
 	"guess-the-song-discord/internal/deezer"
+	"guess-the-song-discord/internal/voice"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/shkh/lastfm-go/lastfm"
@@ -112,6 +114,8 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 
 	fields := make([]*discordgo.MessageEmbedField, len(options.Users))
 
+	var testPreview string
+
 	for i, user := range options.Users {
 		tracks, err := context.Lm.User.GetTopTracks(lastfm.P{
 			"user":   user,
@@ -133,6 +137,9 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 			log.Println(err)
 		} else {
 			deezerPreview = deezerResponse.Preview
+			if testPreview == "" {
+				testPreview = deezerPreview
+			}
 		}
 
 		fields[i] = &discordgo.MessageEmbedField{
@@ -158,13 +165,30 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 					Description: fmt.Sprintf("Starts a top tracks quiz using the provided users with \n"+
 						"- Period %s\n"+
 						"- Text Channel %s\n"+
-						"- Voice Channel: %s", options.Period, i.ChannelID, *channel),
+						"- Voice Channel: %s", options.Period, i.ChannelID, channel),
 					Fields: fields,
 				},
 			},
 		},
 	})
 
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// Test connecting and disconnecting from vc
+	session, err := voice.JoinVoiceSession(s, i.GuildID, channel)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	time.Sleep(1000 * time.Millisecond)
+
+	session.PlayFile(testPreview)
+
+	err = session.Close()
 	if err != nil {
 		log.Println(err)
 		return
