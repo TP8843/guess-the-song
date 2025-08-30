@@ -117,5 +117,9 @@ func Search(trackName string, artist string) (*Track, error) {
 		return nil, errors.New("error getting track from deezer")
 	}
 
+	if responseBody.Total == 0 {
+		return nil, errors.New("could not find matching track")
+	}
+
 	return &responseBody.Data[0], nil
 }
