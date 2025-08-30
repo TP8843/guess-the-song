@@ -77,7 +77,7 @@ func Search(trackName string, artist string) (*Track, error) {
 	req, err := http.NewRequest("GET", "https://api.deezer.com/search/track", nil)
 	if err != nil {
 		log.Println(err)
-		return nil, errors.New("error creating request")
+		return nil, errors.New("could not create request for track")
 	}
 
 	q := req.URL.Query()
@@ -92,7 +92,7 @@ func Search(trackName string, artist string) (*Track, error) {
 	if err != nil {
 		log.Println("error getting deezer track, ", err)
 
-		return nil, errors.New("error getting track from deezer")
+		return nil, errors.New("could not get response from deezer")
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -102,23 +102,24 @@ func Search(trackName string, artist string) (*Track, error) {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		log.Println("non 200 status code getting deezer track, ", resp.StatusCode)
+		err = fmt.Errorf("%d status code from deezer", resp.StatusCode)
+		log.Println(err)
 
 		data, _ := io.ReadAll(resp.Body)
 		fmt.Println(string(data))
 
-		return nil, errors.New("error getting track from deezer")
+		return nil, err
 	}
 
 	responseBody := TrackSearchResponse{}
 	err = json.NewDecoder(resp.Body).Decode(&responseBody)
 	if err != nil {
 		log.Println("error decoding deezer response, ", err)
-		return nil, errors.New("error getting track from deezer")
+		return nil, errors.New("could not decode deezer response")
 	}
 
 	if responseBody.Total == 0 {
-		return nil, errors.New("could not find matching track")
+		return nil, errors.New("no match")
 	}
 
 	return &responseBody.Data[0], nil
