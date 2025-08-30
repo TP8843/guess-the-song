@@ -24,7 +24,7 @@ const (
 	frameRate int     = 48000               // audio sampling rate
 	frameSize int     = 960                 // uint16 size of each audio frame
 	maxBytes  int     = (frameSize * 2) * 2 // max size of opus data
-	volume    float32 = 0.1
+	volume    float32 = 0.15
 )
 
 func (s *Session) PlayFile(file string) {
@@ -43,8 +43,6 @@ func (s *Session) PlayFile(file string) {
 		}
 	}(ffmpegOut)
 
-	run.Stderr = os.Stderr
-
 	ffmpegBuf := bufio.NewReaderSize(ffmpegOut, 16384)
 
 	err = run.Start()
@@ -52,7 +50,7 @@ func (s *Session) PlayFile(file string) {
 		log.Println("error running ffmpeg", err)
 	}
 	defer func(Process *os.Process) {
-		err := Process.Kill()
+		err := Process.Release()
 		if err != nil {
 			log.Println("error killing ffmpeg", err)
 		}
