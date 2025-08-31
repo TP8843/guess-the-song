@@ -5,5 +5,5 @@
 1. Install go
 2. Install ffmpeg
 3. Install gcc
-  - Windows - https://code.visualstudio.com/docs/cpp/config-mingw
+    - Windows - https://code.visualstudio.com/docs/cpp/config-mingw
 3. Enable C support - `go env -w CGO_ENABLED=1`
