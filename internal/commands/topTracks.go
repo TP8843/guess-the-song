@@ -4,11 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"guess-the-song-discord/internal"
-	"guess-the-song-discord/internal/deezer"
-	"guess-the-song-discord/internal/voice"
+	"guess-the-song-discord/internal/quiz"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/shkh/lastfm-go/lastfm"
@@ -18,6 +16,10 @@ type TopTrackOptions struct {
 	Users  []string
 	Period string
 }
+
+const (
+	TracksPerUser = 3
+)
 
 var (
 	TopTrackCommand = discordgo.ApplicationCommand{
@@ -112,47 +114,40 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 		return
 	}
 
-	fields := make([]*discordgo.MessageEmbedField, len(options.Users))
+	fields := make([]*discordgo.MessageEmbedField, len(options.Users)*TracksPerUser)
 
-	var testPreview string
+	var tracks = make([]quiz.LastfmTrack, len(options.Users)*TracksPerUser)
 
 	for i, user := range options.Users {
-		tracks, err := context.Lm.User.GetTopTracks(lastfm.P{
+		userTracks, err := context.Lm.User.GetTopTracks(lastfm.P{
 			"user":   user,
-			"limit":  3,
+			"limit":  TracksPerUser,
 			"period": options.Period,
 		})
 		if err != nil {
 			log.Println(err)
 			fields[i] = &discordgo.MessageEmbedField{
 				Name:  user,
-				Value: "Could not find tracks for user",
+				Value: "Could not find top tracks for user",
 			}
 			continue
 		}
 
-		deezerResponse, err := deezer.Search(tracks.Tracks[0].Name, tracks.Tracks[0].Artist.Name)
-		var deezerPreview string
-		if err != nil {
-			log.Println(err)
-		} else {
-			deezerPreview = deezerResponse.Preview
-			if testPreview == "" {
-				testPreview = deezerPreview
+		for j, track := range userTracks.Tracks {
+			tracks[i*TracksPerUser+j] = quiz.LastfmTrack{
+				LastfmUrl: track.Url,
+				Name:      track.Name,
+				Artist:    track.Artist.Name,
+				User:      user,
 			}
-		}
 
-		fields[i] = &discordgo.MessageEmbedField{
-			Name: user,
-			Value: fmt.Sprintf("1. %s - %s (%s),\n 2. %s - %s,\n 3. %s - %s,\n 4. ...",
-				tracks.Tracks[0].Name,
-				tracks.Tracks[0].Artist.Name,
-				deezerPreview,
-				tracks.Tracks[1].Name,
-				tracks.Tracks[1].Artist.Name,
-				tracks.Tracks[2].Name,
-				tracks.Tracks[2].Artist.Name,
-			),
+			fields[i*TracksPerUser+j] = &discordgo.MessageEmbedField{
+				Name: tracks[i*TracksPerUser+j].User,
+				Value: fmt.Sprintf("%s - %s (%s)",
+					tracks[i*TracksPerUser+j].Name,
+					tracks[i*TracksPerUser+j].Artist,
+					tracks[i*TracksPerUser+j].LastfmUrl),
+			}
 		}
 	}
 
@@ -176,24 +171,35 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 		log.Println(err)
 		return
 	}
-
-	// Test connecting and disconnecting from vc
-	session, err := voice.JoinVoiceSession(s, i.GuildID, channel)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	time.Sleep(1000 * time.Millisecond)
-
-	err = session.PlayFile(testPreview)
-	if err != nil {
-		log.Println(fmt.Errorf("error playing file, %v", err))
-	}
-
-	err = session.Close()
-	if err != nil {
-		log.Println(err)
-		return
-	}
 }
+
+//// Test connecting and disconnecting from vc
+//session, err := voice.JoinVoiceSession(s, i.GuildID, channel)
+//if err != nil {
+//	log.Println(err)
+//	return
+//}
+//
+//time.Sleep(1000 * time.Millisecond)
+//
+//err = session.PlayFile(testPreview)
+//if err != nil {
+//	log.Println(fmt.Errorf("error playing file, %v", err))
+//}
+//
+//err = session.Close()
+//if err != nil {
+//	log.Println(err)
+//	return
+//}
+
+//deezerResponse, err := deezer.Search(userTracks.Tracks[0].Name, userTracks.Tracks[0].Artist.Name)
+//var deezerPreview string
+//if err != nil {
+//	log.Println(err)
+//} else {
+//	deezerPreview = deezerResponse.Preview
+//	if testPreview == "" {
+//		testPreview = deezerPreview
+//	}
+//}
