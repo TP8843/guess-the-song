@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"guess-the-song-discord/internal/commands"
+	"guess-the-song-discord/internal/quiz"
 	"log"
 	"os"
 	"os/signal"
@@ -13,7 +15,6 @@ import (
 )
 
 // For managing current games: https://github.com/patrickmn/go-cache
-// For taking .mp3 from internet and converting to dca: https://github.com/jogramming/dca
 
 var (
 	BotToken     = flag.String("token", "", "Bot access token")
@@ -43,7 +44,8 @@ func init() {
 }
 
 func init() {
-	initCommandListener()
+	commandContext := commands.NewContext(quiz.NewState(s), lm)
+	initCommandListener(commandContext)
 }
 
 func main() {

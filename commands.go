@@ -19,11 +19,7 @@ var registeredCommands []*discordgo.ApplicationCommand
 
 var commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){}
 
-func initCommandListener() {
-	commandContext := commands.Context{
-		Lm: lm,
-	}
-
+func initCommandListener(commandContext *commands.Context) {
 	commandHandlers["top-tracks"] = commandContext.TopTracks
 
 	registeredCommands = make([]*discordgo.ApplicationCommand, len(commandList))

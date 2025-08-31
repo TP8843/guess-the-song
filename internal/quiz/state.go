@@ -1,22 +1,32 @@
 package quiz
 
-import "github.com/shkh/lastfm-go/lastfm"
+import (
+	"errors"
+	"fmt"
 
-// State Handles current state for a quiz in the server
+	"github.com/bwmarrin/discordgo"
+)
+
 type State struct {
-	tracks []lastfm.UserGetTopTracks
+	Session *discordgo.Session
+	quizzes map[string]*Quiz
 }
 
-type LastfmTrack struct {
-	LastfmUrl string
-	Name      string
-	Artist    string
-	User      string
+func NewState(session *discordgo.Session) *State {
+	return &State{
+		Session: session,
+		quizzes: make(map[string]*Quiz),
+	}
 }
 
-// ResolvedTrack LastfmTrack once it has been resolved using the Deezer API
-type ResolvedTrack struct {
-	Lastfm        LastfmTrack
-	DeezerPreview string
-	DeezerUrl     string
+func (s *State) GetQuiz(textChannel string) (*Quiz, error) {
+	if s.quizzes == nil {
+		return nil, errors.New("no quizzes data structure")
+	}
+
+	if s.quizzes[textChannel] == nil {
+		return nil, fmt.Errorf("no quiz found with text channel id %s", textChannel)
+	}
+
+	return s.quizzes[textChannel], nil
 }

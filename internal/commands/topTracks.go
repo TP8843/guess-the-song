@@ -171,35 +171,10 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 		log.Println(err)
 		return
 	}
+
+	err = context.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, tracks)
+	if err != nil {
+		log.Println(fmt.Errorf("could not start quiz: %w", err))
+		return
+	}
 }
-
-//// Test connecting and disconnecting from vc
-//session, err := voice.JoinVoiceSession(s, i.GuildID, channel)
-//if err != nil {
-//	log.Println(err)
-//	return
-//}
-//
-//time.Sleep(1000 * time.Millisecond)
-//
-//err = session.PlayFile(testPreview)
-//if err != nil {
-//	log.Println(fmt.Errorf("error playing file, %v", err))
-//}
-//
-//err = session.Close()
-//if err != nil {
-//	log.Println(err)
-//	return
-//}
-
-//deezerResponse, err := deezer.Search(userTracks.Tracks[0].Name, userTracks.Tracks[0].Artist.Name)
-//var deezerPreview string
-//if err != nil {
-//	log.Println(err)
-//} else {
-//	deezerPreview = deezerResponse.Preview
-//	if testPreview == "" {
-//		testPreview = deezerPreview
-//	}
-//}
