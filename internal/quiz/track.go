@@ -25,22 +25,25 @@ type ResolvedTrack struct {
 
 // chooseTrack Chooses a track until one with a matching Deezer preview is found
 func (q *Quiz) chooseTrack() error {
+	q.mutex.Lock()
 	q.currentTrack = nil
 
 	source := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(source)
 
 	for q.currentTrack == nil && len(q.remaining) > 0 {
-		choice := q.remaining[r.Intn(len(q.remaining))]
+		choicePosition := r.Intn(len(q.remaining))
+		choice := q.remaining[choicePosition]
 		track := q.tracks[choice]
 
-		q.remaining = append(q.remaining[:choice], q.remaining[choice+1:]...)
+		q.remaining = append(q.remaining[:choicePosition], q.remaining[choicePosition+1:]...)
 
 		deezerResponse, err := deezer.Search(track.Name, track.Artist)
 		if err != nil && err.Error() == "no match" {
 			log.Printf("No match for %s - %s\n", track.Name, track.Artist)
 			continue
 		} else if err != nil {
+			q.mutex.Unlock()
 			return fmt.Errorf("error choosing track: %w", err)
 		}
 
@@ -51,9 +54,11 @@ func (q *Quiz) chooseTrack() error {
 		}
 	}
 
-	if len(q.remaining) == 0 {
+	if q.currentTrack == nil {
+		q.mutex.Unlock()
 		return errors.New("no remaining tracks found")
 	}
 
+	q.mutex.Unlock()
 	return nil
 }
