@@ -2,15 +2,20 @@ package voice
 
 import (
 	"log"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 )
 
+// Session Contains context for a voice session. Must be created using JoinVoiceSession
 type Session struct {
 	Vc        *discordgo.VoiceConnection
 	pcm       chan []int16
 	GuildID   string
 	ChannelID string
+	Stop      chan bool
+	playing   bool
+	playingMu sync.Mutex
 }
 
 // JoinVoiceSession Joins a voice channel.
@@ -27,6 +32,8 @@ func JoinVoiceSession(s *discordgo.Session, guildId, channelId string) (*Session
 		GuildID:   guildId,
 		ChannelID: channelId,
 		pcm:       make(chan []int16, 2),
+		playing:   false,
+		playingMu: sync.Mutex{},
 	}
 
 	// Start automatic packaging of any PCM input to opus and send it
@@ -35,6 +42,7 @@ func JoinVoiceSession(s *discordgo.Session, guildId, channelId string) (*Session
 	return session, nil
 }
 
+// Close Closes a currently running voice session, stopping all playback and closing all processing
 func (s *Session) Close() error {
 	close(s.pcm)
 	return s.Vc.Disconnect()

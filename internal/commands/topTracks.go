@@ -186,7 +186,10 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 
 	time.Sleep(1000 * time.Millisecond)
 
-	session.PlayFile(testPreview)
+	err = session.PlayFile(testPreview)
+	if err != nil {
+		log.Println(fmt.Errorf("error playing file, %v", err))
+	}
 
 	err = session.Close()
 	if err != nil {
