@@ -89,6 +89,22 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 			break
 		}
 
+		for user, points := range quiz.roundPoints {
+			quiz.points[user] += points
+		}
+
+		var pointsString string
+
+		for user, points := range quiz.points {
+			user, err := s.Session.User(user)
+			if err != nil {
+				log.Println(fmt.Errorf("could not get user: %w", err))
+				continue
+			}
+
+			pointsString += fmt.Sprintf("- %s - %d points\n", user.DisplayName(), points)
+		}
+
 		_, err = s.Session.ChannelMessageSendEmbed(quiz.TextChannel, &discordgo.MessageEmbed{
 			Title: fmt.Sprintf("Round %d End", quiz.round),
 			Fields: []*discordgo.MessageEmbedField{
@@ -102,7 +118,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 				},
 				{
 					Name:  "Points",
-					Value: "No-one (it doesn't work yet)",
+					Value: pointsString,
 				},
 			},
 		})

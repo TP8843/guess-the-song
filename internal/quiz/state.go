@@ -19,14 +19,28 @@ func NewState(session *discordgo.Session) *State {
 	}
 }
 
-func (s *State) GetQuiz(textChannel string) (*Quiz, error) {
+// HasQuiz returns whether there is a quiz running in the guild
+func (s *State) HasQuiz(guild string) bool {
+	if s.quizzes == nil {
+		return false
+	}
+
+	if s.quizzes[guild] == nil {
+		return false
+	}
+
+	return true
+}
+
+// GetQuiz gets the quiz for the associated guild
+func (s *State) GetQuiz(guild string) (*Quiz, error) {
 	if s.quizzes == nil {
 		return nil, errors.New("no quizzes data structure")
 	}
 
-	if s.quizzes[textChannel] == nil {
-		return nil, fmt.Errorf("no quiz found with text channel id %s", textChannel)
+	if s.quizzes[guild] == nil {
+		return nil, fmt.Errorf("no quiz found with guild id %s", guild)
 	}
 
-	return s.quizzes[textChannel], nil
+	return s.quizzes[guild], nil
 }

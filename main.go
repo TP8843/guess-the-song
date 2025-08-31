@@ -46,6 +46,7 @@ func init() {
 func init() {
 	commandContext := commands.NewContext(quiz.NewState(s), lm)
 	initCommandListener(commandContext)
+	s.AddHandler(commandContext.HandleMessage)
 }
 
 func main() {
