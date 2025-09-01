@@ -17,8 +17,10 @@ type Quiz struct {
 	points       map[string]int // points map of discord user ids to
 	roundPoints  map[string]int
 	roundActive  bool  // roundActive whether a guessing is currently running for the game
+	allGuessed   bool  // allGuessed whether all correct guesses have been made for a round
 	round        int   // round current round of quiz
 	remaining    []int // remaining all the remaining tracks that have not been used
+	endGame      bool  // endGame whether to end the game at the end of the current round
 	Guild        string
 	TextChannel  string
 	VoiceChannel string
@@ -44,6 +46,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 		round:        1,
 		roundPoints:  nil,
 		roundActive:  false,
+		allGuessed:   false,
 		remaining:    remaining,
 		TextChannel:  textChannel,
 		VoiceChannel: voiceChannel,
@@ -114,10 +117,18 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 			log.Println(fmt.Errorf("could not send end of round message: %w", err))
 		}
 
+		quiz.mutex.Lock()
 		quiz.round += 1
+		end := quiz.endGame
+		quiz.mutex.Unlock()
+
+		// If true, end the game at this round
+		if end {
+			break
+		}
 	}
 
-	_, err = s.Session.ChannelMessageSendEmbed(quiz.TextChannel, &discordgo.MessageEmbed{
+	gameEndMessage := discordgo.MessageEmbed{
 		Title: "Game End",
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -125,7 +136,15 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 				Value: quiz.GeneratePointsString(s.Session),
 			},
 		},
-	})
+	}
+
+	quiz.mutex.Lock()
+	if !quiz.endGame && quiz.round <= Rounds {
+		gameEndMessage.Description = "Game ended early due to missing tracks on Deezer"
+	}
+	quiz.mutex.Unlock()
+
+	_, err = s.Session.ChannelMessageSendEmbed(quiz.TextChannel, &gameEndMessage)
 	if err != nil {
 		log.Println(fmt.Errorf("could not send end of game message: %w", err))
 	}
@@ -163,6 +182,7 @@ func (q *Quiz) RunRound() error {
 		return errors.New("round already active")
 	}
 	q.roundActive = true
+	q.allGuessed = false
 
 	if q.currentTrack == nil {
 		return errors.New("no current track")

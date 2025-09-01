@@ -91,6 +91,7 @@ func (s *Session) PlayFile(file string) error {
 		}
 	}(s.Vc)
 
+outer:
 	for {
 		audioBuffer := make([]int16, frameSize*channels)
 		err = binary.Read(ffmpegBuf, binary.LittleEndian, &audioBuffer)
@@ -104,12 +105,14 @@ func (s *Session) PlayFile(file string) error {
 
 		select {
 		case <-s.Stop:
-			err := run.Cancel()
-			if err != nil && errors.Is(err, os.ErrProcessDone) {
-				log.Println(fmt.Errorf("%w: error cancelling ffmpeg process on force close, %v", ErrFfmpeg, err))
-			}
-			return nil
+			break outer
 		case s.pcm <- audioBuffer:
 		}
 	}
+
+	//err = run.Cancel()
+	//if err != nil && errors.Is(err, os.ErrProcessDone) {
+	//	log.Println(fmt.Errorf("%w: error cancelling ffmpeg process on force close, %v", ErrFfmpeg, err))
+	//}
+	return nil
 }

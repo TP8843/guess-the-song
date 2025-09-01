@@ -33,16 +33,12 @@ func (context *Context) HandleMessage(s *discordgo.Session, i *discordgo.Message
 		}
 
 		_, err := s.ChannelMessageSendEmbedReply(i.ChannelID, &discordgo.MessageEmbed{
-			Fields: []*discordgo.MessageEmbedField{
-				{
-					Value: fmt.Sprintf("Correct! %s is %s (+%d point%c)",
-						result.Type,
-						result.Value,
-						result.Points,
-						plural,
-					),
-				},
-			},
+			Description: fmt.Sprintf("Correct! %s is **%s** (+%d point%c)",
+				result.Type,
+				result.Value,
+				result.Points,
+				plural,
+			),
 		}, i.SoftReference())
 		if err != nil {
 			log.Println(fmt.Errorf("could not send message: %w", err))

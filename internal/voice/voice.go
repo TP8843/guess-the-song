@@ -31,9 +31,10 @@ func JoinVoiceSession(s *discordgo.Session, guildId, channelId string) (*Session
 		Vc:        vc,
 		GuildID:   guildId,
 		ChannelID: channelId,
-		pcm:       make(chan []int16, 2),
+		pcm:       make(chan []int16, 10),
 		playing:   false,
 		playingMu: sync.Mutex{},
+		Stop:      make(chan bool, 1),
 	}
 
 	// Start automatic packaging of any PCM input to opus and send it
