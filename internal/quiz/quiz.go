@@ -93,18 +93,6 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 			quiz.points[user] += points
 		}
 
-		var pointsString string
-
-		for user, points := range quiz.points {
-			user, err := s.Session.User(user)
-			if err != nil {
-				log.Println(fmt.Errorf("could not get user: %w", err))
-				continue
-			}
-
-			pointsString += fmt.Sprintf("- %s - %d points\n", user.DisplayName(), points)
-		}
-
 		_, err = s.Session.ChannelMessageSendEmbed(quiz.TextChannel, &discordgo.MessageEmbed{
 			Title: fmt.Sprintf("Round %d End", quiz.round),
 			Fields: []*discordgo.MessageEmbedField{
@@ -118,7 +106,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 				},
 				{
 					Name:  "Points",
-					Value: pointsString,
+					Value: quiz.GeneratePointsString(s.Session),
 				},
 			},
 		})
@@ -129,23 +117,12 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 		quiz.round += 1
 	}
 
-	var pointsString string
-	for user, points := range quiz.points {
-		user, err := s.Session.User(user)
-		if err != nil {
-			log.Println(fmt.Errorf("could not get user: %w", err))
-			continue
-		}
-
-		pointsString += fmt.Sprintf("- %s - %d points\n", user.DisplayName(), points)
-	}
-
 	_, err = s.Session.ChannelMessageSendEmbed(quiz.TextChannel, &discordgo.MessageEmbed{
 		Title: "Game End",
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:  "Points",
-				Value: pointsString,
+				Value: quiz.GeneratePointsString(s.Session),
 			},
 		},
 	})
@@ -178,6 +155,7 @@ func (s *State) EndQuiz(guild string) error {
 	return nil
 }
 
+// RunRound Play a round of the quiz. Plays a track and marks the round as active
 func (q *Quiz) RunRound() error {
 	q.mutex.Lock()
 
@@ -205,4 +183,20 @@ func (q *Quiz) RunRound() error {
 	q.mutex.Unlock()
 
 	return nil
+}
+
+// GeneratePointsString Generate a bullet point list of all players and their current points
+func (q *Quiz) GeneratePointsString(s *discordgo.Session) string {
+	var pointsString string
+	for user, points := range q.points {
+		user, err := s.User(user)
+		if err != nil {
+			log.Println(fmt.Errorf("could not get user: %w", err))
+			continue
+		}
+
+		pointsString += fmt.Sprintf("- %s - %d points\n", user.DisplayName(), points)
+	}
+
+	return pointsString
 }
