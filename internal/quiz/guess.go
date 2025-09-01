@@ -1,22 +1,22 @@
 package quiz
 
-type GuessResult struct {
-	GuessType string
-	Corrected string
-}
-
-func (q *Quiz) ProcessGuess(user, guess string) *GuessResult {
+func (q *Quiz) ProcessGuess(user, guess string) *GuessElement {
 	q.mutex.Lock()
-	var result *GuessResult
+	var result *GuessElement
 
 	// Only process guesses if round is currently running
 	if q.roundActive == false || q.currentTrack == nil {
-	} else if q.currentTrack.Lastfm.Name == guess {
-		q.roundPoints[user] += 2
-		result = &GuessResult{"title", q.currentTrack.Lastfm.Name}
-	} else if q.currentTrack.Lastfm.Artist == guess {
-		q.roundPoints[user] += 2
-		result = &GuessResult{"artist", q.currentTrack.Lastfm.Artist}
+		q.mutex.Unlock()
+		return nil
+	}
+
+	for _, element := range q.currentTrack.GuessElements {
+		if element.Guessed == false && element.Value == guess {
+			element.Guessed = true
+			result = element
+			q.roundPoints[user] += element.Points
+			break
+		}
 	}
 
 	q.mutex.Unlock()

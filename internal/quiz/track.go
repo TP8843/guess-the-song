@@ -21,6 +21,16 @@ type ResolvedTrack struct {
 	Lastfm        LastfmTrack
 	DeezerPreview string
 	DeezerUrl     string
+	GuessElements []*GuessElement
+}
+
+// GuessElement Used to track what can be guessed and what has been guessed
+// so far
+type GuessElement struct {
+	Value   string
+	Type    string
+	Points  int
+	Guessed bool
 }
 
 // chooseTrack Chooses a track until one with a matching Deezer preview is found
@@ -51,6 +61,20 @@ func (q *Quiz) chooseTrack() error {
 			Lastfm:        track,
 			DeezerPreview: deezerResponse.Preview,
 			DeezerUrl:     deezerResponse.Link,
+			GuessElements: []*GuessElement{
+				{
+					Value:   track.Name,
+					Type:    "Name",
+					Points:  2,
+					Guessed: false,
+				},
+				{
+					Value:   track.Artist,
+					Type:    "Artist",
+					Points:  2,
+					Guessed: false,
+				},
+			},
 		}
 	}
 

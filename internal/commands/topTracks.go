@@ -172,9 +172,10 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 		return
 	}
 
-	err = context.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, tracks)
-	if err != nil {
-		log.Println(fmt.Errorf("could not start quiz: %w", err))
-		return
-	}
+	go func() {
+		err := context.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, tracks)
+		if err != nil {
+			log.Println(fmt.Errorf("could not start quiz: %w", err))
+		}
+	}()
 }

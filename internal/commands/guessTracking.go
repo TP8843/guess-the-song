@@ -26,10 +26,21 @@ func (context *Context) HandleMessage(s *discordgo.Session, i *discordgo.Message
 	result := quiz.ProcessGuess(i.Author.ID, i.Content)
 
 	if result != nil {
+		var plural rune = 's'
+
+		if result.Points == 1 {
+			plural = '\000'
+		}
+
 		_, err := s.ChannelMessageSendEmbedReply(i.ChannelID, &discordgo.MessageEmbed{
 			Fields: []*discordgo.MessageEmbedField{
 				{
-					Value: fmt.Sprintf("Correct! The %s is %s", result.GuessType, result.Corrected),
+					Value: fmt.Sprintf("Correct! %s is %s (+%d point%c)",
+						result.Type,
+						result.Value,
+						result.Points,
+						plural,
+					),
 				},
 			},
 		}, i.SoftReference())
