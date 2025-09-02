@@ -37,7 +37,7 @@ func JoinVoiceSession(s *discordgo.Session, guildId, channelId string) (*Session
 		Stop:      make(chan bool, 1),
 	}
 
-	// Start automatic packaging of any PCM input to opus and send it
+	// Run automatic packaging of any PCM input to opus and send it
 	go session.sendPCM()
 
 	return session, nil

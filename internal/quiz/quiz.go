@@ -3,6 +3,7 @@ package quiz
 import (
 	"errors"
 	"fmt"
+	"guess-the-song-discord/internal/quiz/round"
 	"guess-the-song-discord/internal/quiz/session"
 	"guess-the-song-discord/internal/quiz/tracks"
 	"log"
@@ -13,13 +14,10 @@ import (
 
 // Quiz Handles current state for a quiz in the server
 type Quiz struct {
-	currentTrack *tracks.ResolvedTrack
-	points       map[string]int // points map of discord user ids to
-	roundPoints  map[string]int
-	roundActive  bool // roundActive whether a guessing is currently running for the game
-	allGuessed   bool // allGuessed whether all correct guesses have been made for a round
-	round        int  // round current round of quiz
-	endGame      bool // endGame whether to end the game at the end of the current round
+	points map[string]int // points map of discord user ids to
+
+	round       *round.Round
+	roundNumber int // roundNumber current round number of quiz
 
 	tracks *tracks.Tracks
 
@@ -45,15 +43,11 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	}(quizSession)
 
 	quiz := &Quiz{
-		tracks:       tracks.NewTracks(trackSlice),
-		currentTrack: nil,
-		points:       make(map[string]int),
-		round:        1,
-		roundPoints:  nil,
-		roundActive:  false,
-		allGuessed:   false,
-		session:      quizSession,
-		mutex:        sync.Mutex{},
+		tracks:      tracks.NewTracks(trackSlice),
+		points:      make(map[string]int),
+		roundNumber: 1,
+		session:     quizSession,
+		mutex:       sync.Mutex{},
 	}
 
 	if s.quizzes == nil {
@@ -69,35 +63,42 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	s.quizzes[guild] = quiz
 	quiz.mutex.Unlock()
 
-	for quiz.round <= Rounds {
+	for quiz.roundNumber <= Rounds {
 		track, err := quiz.tracks.ChooseTrack()
 		if err != nil {
 			log.Println(fmt.Errorf("could not choose track: %w", err))
 			break
 		}
 
-		quiz.currentTrack = track
+		quiz.round = round.NewRound(quiz.session, track)
 
-		err = quiz.RunRound()
+		err = quiz.round.Run()
 		if err != nil {
-			log.Println(fmt.Errorf("could not run round %d: %w", quiz.round, err))
+			log.Println(fmt.Errorf("could not run round %d: %w", quiz.roundNumber, err))
 			break
 		}
 
-		for user, points := range quiz.roundPoints {
+		roundPoints, err := quiz.round.Points()
+		if err != nil {
+			log.Println(fmt.Errorf("could not get points for round %d: %w", quiz.roundNumber, err))
+		}
+		for user, points := range roundPoints {
 			quiz.points[user] += points
 		}
 
 		_, err = s.Session.ChannelMessageSendEmbed(quiz.session.TextChannel(), &discordgo.MessageEmbed{
-			Title: fmt.Sprintf("Round %d End", quiz.round),
+			Title: fmt.Sprintf("Round %d End", quiz.roundNumber),
 			Fields: []*discordgo.MessageEmbedField{
 				{
-					Name:  "Track",
-					Value: fmt.Sprintf("%s - %s (from [%s](https://last.fm/user/%s))", quiz.currentTrack.Lastfm.Name, quiz.currentTrack.Lastfm.Artist, quiz.currentTrack.Lastfm.User, quiz.currentTrack.Lastfm.User),
-				},
-				{
-					Name:  "Links",
-					Value: fmt.Sprintf("- Lastfm - %s\n- Deezer - %s", quiz.currentTrack.Lastfm.LastfmUrl, quiz.currentTrack.DeezerUrl),
+					Name: "Track",
+					Value: fmt.Sprintf("%s - %s (from [%s](https://last.fm/user/%s))\n [Last.fm](%s) [Deezer](%s)",
+						track.Lastfm.Name,
+						track.Lastfm.Artist,
+						track.Lastfm.User,
+						track.Lastfm.User,
+						track.Lastfm.LastfmUrl,
+						track.DeezerUrl,
+					),
 				},
 				{
 					Name:  "Points",
@@ -109,10 +110,8 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 			log.Println(fmt.Errorf("could not send end of round message: %w", err))
 		}
 
-		quiz.mutex.Lock()
-		quiz.round += 1
-		end := quiz.endGame
-		quiz.mutex.Unlock()
+		quiz.roundNumber += 1
+		end := quiz.round.GetEndGame()
 
 		// If true, end the game at this round
 		if end {
@@ -131,7 +130,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	}
 
 	quiz.mutex.Lock()
-	if !quiz.endGame && quiz.round <= Rounds {
+	if !quiz.round.GetEndGame() && quiz.roundNumber <= Rounds {
 		gameEndMessage.Description = "Game ended early due to missing trackSlice on Deezer"
 	}
 	quiz.mutex.Unlock()
@@ -162,37 +161,6 @@ func (s *State) EndQuiz(guild string) error {
 	if err != nil {
 		return fmt.Errorf("ended quiz but could not leave voice: %w", err)
 	}
-
-	return nil
-}
-
-// RunRound Play a round of the quiz. Plays a track and marks the round as active
-func (q *Quiz) RunRound() error {
-	q.mutex.Lock()
-
-	if q.roundActive == true {
-		return errors.New("round already active")
-	}
-	q.roundActive = true
-	q.allGuessed = false
-
-	if q.currentTrack == nil {
-		return errors.New("no current track")
-	}
-
-	// Reset points for the round
-	q.roundPoints = make(map[string]int)
-
-	q.mutex.Unlock()
-
-	err := q.session.PlayFile(q.currentTrack.DeezerPreview)
-	if err != nil {
-		return fmt.Errorf("could not play current track: %w", err)
-	}
-
-	q.mutex.Lock()
-	q.roundActive = false
-	q.mutex.Unlock()
 
 	return nil
 }
