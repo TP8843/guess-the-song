@@ -14,11 +14,10 @@ func (round *Round) ProcessGuess(textChannel, user, guess string) *tracks.GuessE
 	var result *tracks.GuessElement
 
 	for _, element := range round.currentTrack.GuessElements {
-		if element.Guessed == false && element.Value == guess {
-			element.Guessed = true
+		if element.CheckGuess(guess) {
 			round.guessTotal += 1
 			result = element
-			round.roundPoints[user] += element.Points
+			round.roundPoints[user] += element.GetPoints()
 		}
 	}
 

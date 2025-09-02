@@ -23,15 +23,15 @@ func (context *Context) HandleMessage(s *discordgo.Session, i *discordgo.Message
 	if result != nil {
 		var plural = 's'
 
-		if result.Points == 1 {
+		if result.GetPoints() == 1 {
 			plural = '\000'
 		}
 
 		_, err := s.ChannelMessageSendEmbedReply(i.ChannelID, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Correct! %s is **%s** (+%d point%c)",
-				result.Type,
-				result.Value,
-				result.Points,
+				result.GetCategory(),
+				result.GetValue(),
+				result.GetPoints(),
 				plural,
 			),
 		}, i.SoftReference())
