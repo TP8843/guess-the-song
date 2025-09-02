@@ -11,23 +11,19 @@ func (round *Round) ProcessGuess(textChannel, user, guess string) *tracks.GuessE
 		return nil
 	}
 
-	allGuessed := true
 	var result *tracks.GuessElement
 
 	for _, element := range round.currentTrack.GuessElements {
-		if element.Guessed == false {
-			if element.Value == guess {
-				element.Guessed = true
-				result = element
-				round.roundPoints[user] += element.Points
-			} else {
-				allGuessed = false
-			}
+		if element.Guessed == false && element.Value == guess {
+			element.Guessed = true
+			round.guessTotal += 1
+			result = element
+			round.roundPoints[user] += element.Points
 		}
 	}
 
-	if !round.allGuessed && allGuessed {
-		round.allGuessed = true
+	// If all guesses have been made
+	if round.guessTotal == len(round.currentTrack.GuessElements) {
 		round.state = Complete
 		round.session.Stop()
 	}

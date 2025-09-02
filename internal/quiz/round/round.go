@@ -16,7 +16,7 @@ const (
 
 type Round struct {
 	currentTrack *tracks.ResolvedTrack
-	allGuessed   bool
+	guessTotal   int            // guessTotal total number of correct guesses for round
 	roundPoints  map[string]int // roundPoints number of points won by all users in a round
 	endGame      bool           // endGame whether to end the game at the end of the round
 
@@ -29,11 +29,11 @@ type Round struct {
 func NewRound(session *session.Session, currentTrack *tracks.ResolvedTrack) *Round {
 	return &Round{
 		currentTrack: currentTrack,
-		allGuessed:   false,
 		roundPoints:  make(map[string]int),
-		endGame:      false,
 
-		state: Ready,
+		endGame:    false,
+		state:      Ready,
+		guessTotal: 0,
 
 		session: session,
 	}
