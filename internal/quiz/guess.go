@@ -1,11 +1,13 @@
 package quiz
 
-func (q *Quiz) ProcessGuess(user, guess string) *GuessElement {
-	q.mutex.Lock()
-	var result *GuessElement
+import "guess-the-song-discord/internal/quiz/tracks"
 
-	// Only process guesses if round is currently running
-	if q.roundActive == false || q.currentTrack == nil {
+func (q *Quiz) ProcessGuess(textChannel, user, guess string) *tracks.GuessElement {
+	q.mutex.Lock()
+	var result *tracks.GuessElement
+
+	// Only process guesses if round is currently running and guess in correct channel
+	if q.roundActive == false || q.currentTrack == nil || q.session.TextChannel() != textChannel {
 		q.mutex.Unlock()
 		return nil
 	}
@@ -27,11 +29,11 @@ func (q *Quiz) ProcessGuess(user, guess string) *GuessElement {
 
 	// Stop the round if all guesses have been made
 	if !q.allGuessed && allGuessed {
-		q.session.Stop <- true
-
 		q.mutex.Lock()
 		q.allGuessed = true
 		q.mutex.Unlock()
+
+		q.session.Stop()
 	}
 
 	return result

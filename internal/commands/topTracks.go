@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"guess-the-song-discord/internal"
-	"guess-the-song-discord/internal/quiz"
+	"guess-the-song-discord/internal/quiz/tracks"
 	"log"
 	"strings"
 
@@ -116,7 +116,7 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 
 	fields := make([]*discordgo.MessageEmbedField, len(options.Users)*TracksPerUser)
 
-	var tracks = make([]quiz.LastfmTrack, len(options.Users)*TracksPerUser)
+	var trackSlice = make([]tracks.LastfmTrack, len(options.Users)*TracksPerUser)
 
 	for i, user := range options.Users {
 		userTracks, err := context.Lm.User.GetTopTracks(lastfm.P{
@@ -128,13 +128,13 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 			log.Println(err)
 			fields[i] = &discordgo.MessageEmbedField{
 				Name:  user,
-				Value: "Could not find top tracks for user",
+				Value: "Could not find top trackSlice for user",
 			}
 			continue
 		}
 
 		for j, track := range userTracks.Tracks {
-			tracks[i*TracksPerUser+j] = quiz.LastfmTrack{
+			trackSlice[i*TracksPerUser+j] = tracks.LastfmTrack{
 				LastfmUrl: track.Url,
 				Name:      track.Name,
 				Artist:    track.Artist.Name,
@@ -142,11 +142,11 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 			}
 
 			fields[i*TracksPerUser+j] = &discordgo.MessageEmbedField{
-				Name: tracks[i*TracksPerUser+j].User,
+				Name: trackSlice[i*TracksPerUser+j].User,
 				Value: fmt.Sprintf("%s - %s (%s)",
-					tracks[i*TracksPerUser+j].Name,
-					tracks[i*TracksPerUser+j].Artist,
-					tracks[i*TracksPerUser+j].LastfmUrl),
+					trackSlice[i*TracksPerUser+j].Name,
+					trackSlice[i*TracksPerUser+j].Artist,
+					trackSlice[i*TracksPerUser+j].LastfmUrl),
 			}
 		}
 	}
@@ -157,7 +157,7 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 			Embeds: []*discordgo.MessageEmbed{
 				{
 					Title: "Top Tracks Quiz",
-					Description: fmt.Sprintf("Starts a top tracks quiz using the provided users with \n"+
+					Description: fmt.Sprintf("Starts a top trackSlice quiz using the provided users with \n"+
 						"- Period %s\n"+
 						"- Text Channel %s\n"+
 						"- Voice Channel: %s", options.Period, i.ChannelID, channel),
@@ -173,7 +173,7 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 	}
 
 	go func() {
-		err := context.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, tracks)
+		err := context.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, trackSlice)
 		if err != nil {
 			log.Println(fmt.Errorf("could not start quiz: %w", err))
 		}

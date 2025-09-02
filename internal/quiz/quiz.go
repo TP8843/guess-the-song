@@ -3,7 +3,8 @@ package quiz
 import (
 	"errors"
 	"fmt"
-	"guess-the-song-discord/internal/voice"
+	"guess-the-song-discord/internal/quiz/session"
+	"guess-the-song-discord/internal/quiz/tracks"
 	"log"
 	"sync"
 
@@ -12,45 +13,46 @@ import (
 
 // Quiz Handles current state for a quiz in the server
 type Quiz struct {
-	tracks       []LastfmTrack
-	currentTrack *ResolvedTrack
+	currentTrack *tracks.ResolvedTrack
 	points       map[string]int // points map of discord user ids to
 	roundPoints  map[string]int
-	roundActive  bool  // roundActive whether a guessing is currently running for the game
-	allGuessed   bool  // allGuessed whether all correct guesses have been made for a round
-	round        int   // round current round of quiz
-	remaining    []int // remaining all the remaining tracks that have not been used
-	endGame      bool  // endGame whether to end the game at the end of the current round
-	Guild        string
-	TextChannel  string
-	VoiceChannel string
-	session      *voice.Session
-	mutex        sync.Mutex
+	roundActive  bool // roundActive whether a guessing is currently running for the game
+	allGuessed   bool // allGuessed whether all correct guesses have been made for a round
+	round        int  // round current round of quiz
+	endGame      bool // endGame whether to end the game at the end of the current round
+
+	tracks *tracks.Tracks
+
+	session *session.Session
+
+	mutex sync.Mutex
 }
 
 const (
 	Rounds int = 3
 )
 
-func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []LastfmTrack) error {
-	remaining := make([]int, len(tracks))
-	for i := range remaining {
-		remaining[i] = i
+func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []tracks.LastfmTrack) error {
+	quizSession, err := session.StartSession(s.Session, guild, textChannel, voiceChannel)
+	if err != nil {
+		return fmt.Errorf("error starting quiz session: %w", err)
 	}
+	defer func(quizSession *session.Session) {
+		err := quizSession.Close()
+		if err != nil {
+			log.Printf("error closing quiz session: %v", err)
+		}
+	}(quizSession)
 
 	quiz := &Quiz{
-		Guild:        guild,
-		tracks:       tracks,
+		tracks:       tracks.NewTracks(trackSlice),
 		currentTrack: nil,
 		points:       make(map[string]int),
 		round:        1,
 		roundPoints:  nil,
 		roundActive:  false,
 		allGuessed:   false,
-		remaining:    remaining,
-		TextChannel:  textChannel,
-		VoiceChannel: voiceChannel,
-		session:      nil,
+		session:      quizSession,
 		mutex:        sync.Mutex{},
 	}
 
@@ -67,26 +69,16 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 	s.quizzes[guild] = quiz
 	quiz.mutex.Unlock()
 
-	var err error
-	quiz.session, err = voice.JoinVoiceSession(s.Session, guild, voiceChannel)
-	if err != nil {
-		return fmt.Errorf("could not join vc: %v", err)
-	}
-	defer func() {
-		err = s.EndQuiz(guild)
-		if err != nil {
-			log.Println(fmt.Errorf("could not end quiz: %w", err))
-		}
-	}()
-
 	for quiz.round <= Rounds {
-		err = quiz.chooseTrack()
+		track, err := quiz.tracks.ChooseTrack()
 		if err != nil {
 			log.Println(fmt.Errorf("could not choose track: %w", err))
 			break
 		}
 
-		err := quiz.RunRound()
+		quiz.currentTrack = track
+
+		err = quiz.RunRound()
 		if err != nil {
 			log.Println(fmt.Errorf("could not run round %d: %w", quiz.round, err))
 			break
@@ -96,7 +88,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 			quiz.points[user] += points
 		}
 
-		_, err = s.Session.ChannelMessageSendEmbed(quiz.TextChannel, &discordgo.MessageEmbed{
+		_, err = s.Session.ChannelMessageSendEmbed(quiz.session.TextChannel(), &discordgo.MessageEmbed{
 			Title: fmt.Sprintf("Round %d End", quiz.round),
 			Fields: []*discordgo.MessageEmbedField{
 				{
@@ -140,11 +132,11 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, tracks []Last
 
 	quiz.mutex.Lock()
 	if !quiz.endGame && quiz.round <= Rounds {
-		gameEndMessage.Description = "Game ended early due to missing tracks on Deezer"
+		gameEndMessage.Description = "Game ended early due to missing trackSlice on Deezer"
 	}
 	quiz.mutex.Unlock()
 
-	_, err = s.Session.ChannelMessageSendEmbed(quiz.TextChannel, &gameEndMessage)
+	_, err = s.Session.ChannelMessageSendEmbed(quiz.session.TextChannel(), &gameEndMessage)
 	if err != nil {
 		log.Println(fmt.Errorf("could not send end of game message: %w", err))
 	}

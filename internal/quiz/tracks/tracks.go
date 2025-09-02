@@ -1,4 +1,4 @@
-package quiz
+package tracks
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"guess-the-song-discord/internal/deezer"
 	"log"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -24,40 +25,46 @@ type ResolvedTrack struct {
 	GuessElements []*GuessElement
 }
 
-// GuessElement Used to track what can be guessed and what has been guessed
-// so far
-type GuessElement struct {
-	Value   string
-	Type    string
-	Points  int
-	Guessed bool
+type Tracks struct {
+	tracks    []LastfmTrack // tracks all the track to be used in the quiz
+	remaining []int         // remaining all the tracks not yet used in the quiz
+	mutex     sync.Mutex
 }
 
-// chooseTrack Chooses a track until one with a matching Deezer preview is found
-func (q *Quiz) chooseTrack() error {
-	q.mutex.Lock()
-	q.currentTrack = nil
+func NewTracks(tracks []LastfmTrack) *Tracks {
+	remaining := make([]int, len(tracks))
+	for i := range remaining {
+		remaining[i] = i
+	}
+
+	return &Tracks{tracks: tracks, remaining: remaining}
+}
+
+func (tracks *Tracks) ChooseTrack() (*ResolvedTrack, error) {
+	var currentTrack *ResolvedTrack
 
 	source := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(source)
 
-	for q.currentTrack == nil && len(q.remaining) > 0 {
-		choicePosition := r.Intn(len(q.remaining))
-		choice := q.remaining[choicePosition]
-		track := q.tracks[choice]
+	tracks.mutex.Lock()
 
-		q.remaining = append(q.remaining[:choicePosition], q.remaining[choicePosition+1:]...)
+	for currentTrack == nil && len(tracks.remaining) > 0 {
+		choicePosition := r.Intn(len(tracks.remaining))
+		choice := tracks.remaining[choicePosition]
+		track := tracks.tracks[choice]
+
+		tracks.remaining = append(tracks.remaining[:choicePosition], tracks.remaining[choicePosition+1:]...)
 
 		deezerResponse, err := deezer.Search(track.Name, track.Artist)
 		if err != nil && err.Error() == "no match" {
 			log.Printf("No match for %s - %s\n", track.Name, track.Artist)
 			continue
 		} else if err != nil {
-			q.mutex.Unlock()
-			return fmt.Errorf("error choosing track: %w", err)
+			tracks.mutex.Unlock()
+			return nil, fmt.Errorf("error choosing track: %w", err)
 		}
 
-		q.currentTrack = &ResolvedTrack{
+		currentTrack = &ResolvedTrack{
 			Lastfm:        track,
 			DeezerPreview: deezerResponse.Preview,
 			DeezerUrl:     deezerResponse.Link,
@@ -78,11 +85,11 @@ func (q *Quiz) chooseTrack() error {
 		}
 	}
 
-	if q.currentTrack == nil {
-		q.mutex.Unlock()
-		return errors.New("no remaining tracks found")
+	tracks.mutex.Unlock()
+
+	if currentTrack == nil {
+		return nil, errors.New("no remaining tracks found")
 	}
 
-	q.mutex.Unlock()
-	return nil
+	return currentTrack, nil
 }

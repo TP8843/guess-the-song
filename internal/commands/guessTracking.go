@@ -18,15 +18,10 @@ func (context *Context) HandleMessage(s *discordgo.Session, i *discordgo.Message
 		log.Println(fmt.Errorf("could not get quiz: %w", err))
 	}
 
-	// Only read messages from the channel where the quiz was started
-	if quiz.TextChannel != i.ChannelID {
-		return
-	}
-
-	result := quiz.ProcessGuess(i.Author.ID, i.Content)
+	result := quiz.ProcessGuess(i.ChannelID, i.Author.ID, i.Content)
 
 	if result != nil {
-		var plural rune = 's'
+		var plural = 's'
 
 		if result.Points == 1 {
 			plural = '\000'
