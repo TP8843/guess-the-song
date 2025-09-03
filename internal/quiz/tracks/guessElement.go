@@ -3,6 +3,11 @@ package tracks
 import (
 	"regexp"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 // GuessElement Used to track what can be guessed and what has been guessed
@@ -67,6 +72,9 @@ func normaliseString(text string) string {
 
 	text = strings.TrimSpace(text)
 	text = strings.TrimPrefix(text, "the ")
+
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	text, _, _ = transform.String(t, text)
 
 	return text
 }
