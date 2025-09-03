@@ -6,6 +6,7 @@ import (
 	"guess-the-song-discord/internal"
 	"guess-the-song-discord/internal/quiz/tracks"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -13,12 +14,21 @@ import (
 )
 
 type TopTrackOptions struct {
-	Users  []string
-	Period string
+	Users         []string
+	Period        string
+	TracksPerUser int
+	Rounds        int
 }
 
 const (
 	TracksPerUser = 3
+)
+
+var (
+	MinTracksPerUser = 1.0
+	MaxTracksPerUser = 100.0
+	MinRounds        = 1.0
+	MaxRounds        = 30.0
 )
 
 var (
@@ -32,6 +42,20 @@ var (
 				Description: "Space separated list of users to take part in quiz",
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
+			},
+			{
+				Name:        "tracks-per-user",
+				Description: "Maximum number of tracks to pull per user",
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				MinValue:    &MinTracksPerUser,
+				MaxValue:    MaxTracksPerUser,
+			},
+			{
+				Name:        "rounds",
+				Description: "Rounds for game (if there are enough tracks)",
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				MinValue:    &MinRounds,
+				MaxValue:    MaxRounds,
 			},
 			{
 				Name:        "period",
@@ -70,7 +94,7 @@ var (
 
 // ParseTopTrackOptions Puts all data passed in through options into a struct
 func ParseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (out *TopTrackOptions, err error) {
-	out = &TopTrackOptions{nil, "overall"}
+	out = &TopTrackOptions{nil, "overall", 50, 10}
 
 	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
 	for _, option := range options {
@@ -83,6 +107,14 @@ func ParseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionData
 
 	if optionMap["period"] != nil {
 		out.Period = optionMap["period"].StringValue()
+	}
+
+	if optionMap["tracks-per-user"] != nil {
+		out.TracksPerUser = int(optionMap["tracks-per-user"].IntValue())
+	}
+
+	if optionMap["rounds"] != nil {
+		out.Rounds = int(optionMap["rounds"].IntValue())
 	}
 
 	out.Users = strings.Split(optionMap["users"].StringValue(), " ")
@@ -114,24 +146,23 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 		return
 	}
 
-	fields := make([]*discordgo.MessageEmbedField, len(options.Users)*TracksPerUser)
+	var trackSlice = make([]tracks.LastfmTrack, len(options.Users)*options.TracksPerUser)
 
-	var trackSlice = make([]tracks.LastfmTrack, len(options.Users)*TracksPerUser)
+	usersString := ""
 
 	for i, user := range options.Users {
 		userTracks, err := context.Lm.User.GetTopTracks(lastfm.P{
 			"user":   user,
-			"limit":  TracksPerUser,
+			"limit":  options.TracksPerUser,
 			"period": options.Period,
 		})
 		if err != nil {
 			log.Println(err)
-			fields[i] = &discordgo.MessageEmbedField{
-				Name:  user,
-				Value: "Could not find top trackSlice for user",
-			}
+			usersString += fmt.Sprintf("- %s - not found\n", user)
 			continue
 		}
+
+		usersString += fmt.Sprintf("- %s - %d tracks\n", user, len(userTracks.Tracks))
 
 		for j, track := range userTracks.Tracks {
 			trackSlice[i*TracksPerUser+j] = tracks.LastfmTrack{
@@ -139,14 +170,6 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 				Name:      track.Name,
 				Artist:    track.Artist.Name,
 				User:      user,
-			}
-
-			fields[i*TracksPerUser+j] = &discordgo.MessageEmbedField{
-				Name: trackSlice[i*TracksPerUser+j].User,
-				Value: fmt.Sprintf("%s - %s (%s)",
-					trackSlice[i*TracksPerUser+j].Name,
-					trackSlice[i*TracksPerUser+j].Artist,
-					trackSlice[i*TracksPerUser+j].LastfmUrl),
 			}
 		}
 	}
@@ -161,7 +184,20 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 						"- Period %s\n"+
 						"- Text Channel %s\n"+
 						"- Voice Channel: %s", options.Period, i.ChannelID, channel),
-					Fields: fields,
+					Fields: []*discordgo.MessageEmbedField{
+						{
+							Name:  "Users",
+							Value: usersString,
+						},
+						{
+							Name:  "Period",
+							Value: options.Period,
+						},
+						{
+							Name:  "Max Tracks Per User",
+							Value: strconv.Itoa(options.TracksPerUser),
+						},
+					},
 				},
 			},
 		},
@@ -173,7 +209,7 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 	}
 
 	go func() {
-		err := context.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, trackSlice)
+		err := context.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, trackSlice, options.Rounds)
 		if err != nil {
 			log.Println(fmt.Errorf("could not start quiz: %w", err))
 		}

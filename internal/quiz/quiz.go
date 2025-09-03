@@ -8,6 +8,7 @@ import (
 	"guess-the-song-discord/internal/quiz/tracks"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -26,11 +27,7 @@ type Quiz struct {
 	mutex sync.Mutex
 }
 
-const (
-	Rounds int = 3
-)
-
-func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []tracks.LastfmTrack) error {
+func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []tracks.LastfmTrack, rounds int) error {
 	quizSession, err := session.StartSession(s.Session, guild, textChannel, voiceChannel)
 	if err != nil {
 		return fmt.Errorf("error starting quiz session: %w", err)
@@ -63,12 +60,14 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	s.quizzes[guild] = quiz
 	quiz.mutex.Unlock()
 
-	for quiz.roundNumber <= Rounds {
+	for quiz.roundNumber <= rounds {
 		track, err := quiz.tracks.ChooseTrack()
 		if err != nil {
 			log.Println(fmt.Errorf("could not choose track: %w", err))
 			break
 		}
+
+		time.Sleep(3 * time.Second)
 
 		quiz.round = round.NewRound(quiz.session, track)
 
@@ -130,7 +129,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	}
 
 	quiz.mutex.Lock()
-	if !quiz.round.GetEndGame() && quiz.roundNumber <= Rounds {
+	if !quiz.round.GetEndGame() && quiz.roundNumber <= rounds {
 		gameEndMessage.Description = "Game ended early due to missing trackSlice on Deezer"
 	}
 	quiz.mutex.Unlock()

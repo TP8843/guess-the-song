@@ -1,7 +1,6 @@
 package tracks
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 )
@@ -49,8 +48,6 @@ func (gE *GuessElement) GetPoints() int {
 }
 
 func normaliseString(text string) string {
-	fmt.Printf("Before normalisation: %s\n", text)
-
 	text = strings.ToLower(text)
 
 	bracketsRe := regexp.MustCompile("\\(.*\\)")
@@ -69,8 +66,7 @@ func normaliseString(text string) string {
 	text = featRe.ReplaceAllString(text, "")
 
 	text = strings.TrimSpace(text)
-
-	fmt.Printf("After normalisation %s\n", text)
+	text = strings.TrimPrefix(text, "the ")
 
 	return text
 }
