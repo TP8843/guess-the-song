@@ -29,6 +29,26 @@ var lm *lastfm.Api
 
 func init() {
 	flag.Parse()
+
+	if *BotToken == "" {
+		botToken := os.Getenv("BOT_TOKEN")
+		BotToken = &botToken
+	}
+
+	if *LastFMKey == "" {
+		lastFMKey := os.Getenv("LASTFM_KEY")
+		LastFMKey = &lastFMKey
+	}
+
+	if *LastFMSecret == "" {
+		lastFMSecret := os.Getenv("LASTFM_SECRET")
+		LastFMSecret = &lastFMSecret
+	}
+
+	if *GuildID == "" {
+		guild := os.Getenv("GUILD_ID")
+		GuildID = &guild
+	}
 }
 
 func init() {

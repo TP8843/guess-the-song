@@ -14,3 +14,11 @@
 - `-lastfm_key lastfm_api_key`
 - `-lastfm_secret lastfm_shared_secret`
 - `-guild id_of_guild_for_testing`
+
+## Environment Variables
+If arguments are not available, environment variables can be used instead:
+
+- `BOT_TOKEN` - Discord bot token
+- `LASTFM_KEY` - Last.fm API key
+- `LASTFM_SECRET` - Last.fm shared secret
+- `GUILD_ID` - ID of the guild (server) for the bot to work on
