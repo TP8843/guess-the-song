@@ -20,10 +20,6 @@ type TopTrackOptions struct {
 	Rounds        int
 }
 
-const (
-	TracksPerUser = 3
-)
-
 var (
 	MinTracksPerUser = 1.0
 	MaxTracksPerUser = 100.0
@@ -165,7 +161,7 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 		usersString += fmt.Sprintf("- %s - %d tracks\n", user, len(userTracks.Tracks))
 
 		for j, track := range userTracks.Tracks {
-			trackSlice[i*TracksPerUser+j] = tracks.LastfmTrack{
+			trackSlice[i*options.TracksPerUser+j] = tracks.LastfmTrack{
 				LastfmUrl: track.Url,
 				Name:      track.Name,
 				Artist:    track.Artist.Name,
