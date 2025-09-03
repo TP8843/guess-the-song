@@ -1,17 +1,34 @@
 package tracks
 
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
 // GuessElement Used to track what can be guessed and what has been guessed
 // so far
 type GuessElement struct {
-	value    string
-	category string
-	points   int
-	guessed  bool
+	value      string
+	normalised string
+	category   string
+	points     int
+	guessed    bool
+}
+
+func NewGuessElement(value, category string, points int) *GuessElement {
+	return &GuessElement{
+		value:      value,
+		normalised: normaliseString(value),
+		category:   category,
+		points:     points,
+		guessed:    false,
+	}
 }
 
 func (gE *GuessElement) CheckGuess(text string) bool {
 	// Only allow a guess once
-	if !gE.guessed && text == gE.value {
+	if !gE.guessed && normaliseString(text) == gE.normalised {
 		gE.guessed = true
 		return true
 	}
@@ -29,4 +46,31 @@ func (gE *GuessElement) GetCategory() string {
 
 func (gE *GuessElement) GetPoints() int {
 	return gE.points
+}
+
+func normaliseString(text string) string {
+	fmt.Printf("Before normalisation: %s\n", text)
+
+	text = strings.ToLower(text)
+
+	bracketsRe := regexp.MustCompile("\\(.*\\)")
+	text = bracketsRe.ReplaceAllString(text, "")
+
+	squareRe := regexp.MustCompile("\\[.*]")
+	text = squareRe.ReplaceAllString(text, "")
+
+	andRe := regexp.MustCompile("and")
+	text = andRe.ReplaceAllString(text, "&")
+
+	dashRe := regexp.MustCompile("-.*")
+	text = dashRe.ReplaceAllString(text, "")
+
+	featRe := regexp.MustCompile("feat.*")
+	text = featRe.ReplaceAllString(text, "")
+
+	text = strings.TrimSpace(text)
+
+	fmt.Printf("After normalisation %s\n", text)
+
+	return text
 }

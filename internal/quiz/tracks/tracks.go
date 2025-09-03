@@ -69,18 +69,8 @@ func (tracks *Tracks) ChooseTrack() (*ResolvedTrack, error) {
 			DeezerPreview: deezerResponse.Preview,
 			DeezerUrl:     deezerResponse.Link,
 			GuessElements: []*GuessElement{
-				{
-					value:    track.Name,
-					category: "Name",
-					points:   2,
-					guessed:  false,
-				},
-				{
-					value:    track.Artist,
-					category: "Artist",
-					points:   2,
-					guessed:  false,
-				},
+				NewGuessElement(track.Name, "Name", 2),
+				NewGuessElement(track.Artist, "Artist", 2),
 			},
 		}
 	}
