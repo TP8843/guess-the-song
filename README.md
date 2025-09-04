@@ -43,7 +43,6 @@ Enable CGO support:
 
 You can configure the bot using either command-line arguments or environment variables.
 
-
 - Arguments:
     - `-token` discord_token
     - `-lastfm_key` lastfm_api_key
@@ -55,20 +54,21 @@ You can configure the bot using either command-line arguments or environment var
     - `LASTFM_SECRET` — Last.fm shared secret
     - `GUILD_ID` — ID of a guild (server) for command registration during development
 
-Tip:
-- During development, prefer using a single test guild (`-guild` or `GUILD_ID`) to register slash commands instantly.
-- Global command registration can take up to an hour to propagate.
+>[!Tip]
+> - During development, prefer using a single test guild (`-guild` or `GUILD_ID`) to register slash commands instantly.
+> - Global command registration can take up to an hour to propagate.
 
 ## Quick Start
 
 ### Using arguments:
-- macOS/Linux:
-  - `./guess-the-song-discord -token "YOUR_DISCORD_TOKEN" -lastfm_key "YOUR_LASTFM_KEY" -lastfm_secret "YOUR_LASTFM_SECRET" -guild "YOUR_GUILD_ID"`
-- Windows (PowerShell):
-    - `.\guess-the-song-discord.exe -token "YOUR_DISCORD_TOKEN" -lastfm_key "YOUR_LASTFM_KEY" -lastfm_secret "YOUR_LASTFM_SECRET" -guild "YOUR_GUILD_ID"`
+macOS/Linux:
+- `./guess-the-song-discord -token "YOUR_DISCORD_TOKEN" -lastfm_key "YOUR_LASTFM_KEY" -lastfm_secret "YOUR_LASTFM_SECRET" -guild "YOUR_GUILD_ID"`
+
+Windows (PowerShell):
+- `.\guess-the-song-discord.exe -token "YOUR_DISCORD_TOKEN" -lastfm_key "YOUR_LASTFM_KEY" -lastfm_secret "YOUR_LASTFM_SECRET" -guild "YOUR_GUILD_ID"`
 
 ### Using environment variables:
-- 
+
 macOS/Linux:
 ```shell
 export BOT_TOKEN="YOUR_DISCORD_TOKEN"
