@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"log"
+	"os"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -44,4 +45,15 @@ func FindVoiceChat(s *discordgo.Session, guildId string, userId string) (channel
 	}
 
 	return channel, nil
+}
+
+// SetFromEnv sets the value of a variable from an environment variable
+func SetFromEnv(target *string, envKey string) {
+	if *target == "" {
+		return
+	}
+
+	if v := os.Getenv(envKey); v != "" {
+		*target = v
+	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"guess-the-song-discord/internal"
 	"guess-the-song-discord/internal/commands"
 	"guess-the-song-discord/internal/quiz"
 	"log"
@@ -14,7 +15,12 @@ import (
 	"github.com/shkh/lastfm-go/lastfm"
 )
 
-// For managing current games: https://github.com/patrickmn/go-cache
+const (
+	EnvBotToken     = "BOT_TOKEN"
+	EnvLastFMKey    = "LASTFM_KEY"
+	EnvLastFMSecret = "LASTFM_SECRET"
+	EnvGuildID      = "GUILD_ID"
+)
 
 var (
 	BotToken     = flag.String("token", "", "Bot access token")
@@ -30,25 +36,10 @@ var lm *lastfm.Api
 func init() {
 	flag.Parse()
 
-	if *BotToken == "" {
-		botToken := os.Getenv("BOT_TOKEN")
-		BotToken = &botToken
-	}
-
-	if *LastFMKey == "" {
-		lastFMKey := os.Getenv("LASTFM_KEY")
-		LastFMKey = &lastFMKey
-	}
-
-	if *LastFMSecret == "" {
-		lastFMSecret := os.Getenv("LASTFM_SECRET")
-		LastFMSecret = &lastFMSecret
-	}
-
-	if *GuildID == "" {
-		guild := os.Getenv("GUILD_ID")
-		GuildID = &guild
-	}
+	internal.SetFromEnv(BotToken, EnvBotToken)
+	internal.SetFromEnv(LastFMKey, EnvLastFMKey)
+	internal.SetFromEnv(LastFMSecret, EnvLastFMSecret)
+	internal.SetFromEnv(GuildID, EnvGuildID)
 }
 
 func init() {

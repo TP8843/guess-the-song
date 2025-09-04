@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type TrackSearchResponse struct {
@@ -69,56 +71,49 @@ type Artist struct {
 }
 
 func Search(trackName string, artist string) (*Track, error) {
-	trackNameEncoded := url.QueryEscape(trackName)
-	artistEncoded := url.QueryEscape(artist)
+	const (
+		baseUrl = "https://api.deezer.com/search/track"
+		limit   = 1
+	)
 
-	searchParams := fmt.Sprintf("track:\"%s\" artist:\"%s\"", trackNameEncoded, artistEncoded)
+	searchParams := fmt.Sprintf(`track:"%s" artist:"%s"`, trackName, artist)
 
-	req, err := http.NewRequest("GET", "https://api.deezer.com/search/track", nil)
+	req, err := http.NewRequest("GET", baseUrl, nil)
 	if err != nil {
 		log.Println(err)
-		return nil, errors.New("could not create request for track")
+		return nil, fmt.Errorf("could not create request for track: %w", err)
 	}
 
 	q := req.URL.Query()
 	q.Add("q", searchParams)
-	q.Add("limit", "1")
-
+	q.Add("limit", strconv.Itoa(limit))
 	req.URL.RawQuery = q.Encode()
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println("error getting deezer track, ", err)
-
-		return nil, errors.New("could not get response from deezer")
+		return nil, fmt.Errorf("could not get response from deezer: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Println("error closing deezer request body, ", err)
-		}
-	}(resp.Body)
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("%d status code from deezer", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		err = fmt.Errorf("deezer returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 		log.Println(err)
-
-		data, _ := io.ReadAll(resp.Body)
-		fmt.Println(string(data))
-
 		return nil, err
 	}
 
 	responseBody := TrackSearchResponse{}
-	err = json.NewDecoder(resp.Body).Decode(&responseBody)
-	if err != nil {
-		log.Println("error decoding deezer response, ", err)
-		return nil, errors.New("could not decode deezer response")
+	if err = json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
+		log.Println("error decoding deezer response,", err)
+		return nil, fmt.Errorf("could not decode deezer response: %w", err)
 	}
 
-	if responseBody.Total == 0 {
+	if responseBody.Total == 0 || len(responseBody.Data) == 0 {
 		return nil, errors.New("no match")
 	}
 

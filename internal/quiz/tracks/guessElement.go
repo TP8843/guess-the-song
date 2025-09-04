@@ -20,6 +20,15 @@ type GuessElement struct {
 	guessed    bool
 }
 
+// Precompiled regexes for normalisation
+var (
+	reParens = regexp.MustCompile("\\(.*\\)")
+	reSquare = regexp.MustCompile("\\[.*]")
+	reDash   = regexp.MustCompile("-.*")
+	reFeat   = regexp.MustCompile("feat.*")
+	andRepl  = strings.NewReplacer("and", "&")
+)
+
 func NewGuessElement(value, category string, points int) *GuessElement {
 	return &GuessElement{
 		value:      value,
@@ -55,20 +64,11 @@ func (gE *GuessElement) GetPoints() int {
 func normaliseString(text string) string {
 	text = strings.ToLower(text)
 
-	bracketsRe := regexp.MustCompile("\\(.*\\)")
-	text = bracketsRe.ReplaceAllString(text, "")
-
-	squareRe := regexp.MustCompile("\\[.*]")
-	text = squareRe.ReplaceAllString(text, "")
-
-	andRe := regexp.MustCompile("and")
-	text = andRe.ReplaceAllString(text, "&")
-
-	dashRe := regexp.MustCompile("-.*")
-	text = dashRe.ReplaceAllString(text, "")
-
-	featRe := regexp.MustCompile("feat.*")
-	text = featRe.ReplaceAllString(text, "")
+	text = reParens.ReplaceAllString(text, "")
+	text = reSquare.ReplaceAllString(text, "")
+	text = reDash.ReplaceAllString(text, "")
+	text = reFeat.ReplaceAllString(text, "")
+	text = andRepl.Replace(text)
 
 	text = strings.TrimSpace(text)
 	text = strings.TrimPrefix(text, "the ")

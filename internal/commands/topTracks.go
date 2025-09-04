@@ -6,7 +6,6 @@ import (
 	"guess-the-song-discord/internal"
 	"guess-the-song-discord/internal/quiz/tracks"
 	"log"
-	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -19,6 +18,8 @@ type TopTrackOptions struct {
 	TracksPerUser int
 	Rounds        int
 }
+
+const quizTitle = "Guess the Song - Top Tracks"
 
 var (
 	MinTracksPerUser = 1.0
@@ -88,8 +89,15 @@ var (
 	}
 )
 
-// ParseTopTrackOptions Puts all data passed in through options into a struct
-func ParseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (out *TopTrackOptions, err error) {
+// parseTopTrackOptions Puts all data passed in through options into a struct
+func parseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (out *TopTrackOptions, err error) {
+	const (
+		usersOptKey         = "users"
+		periodOptKey        = "period"
+		tracksPerUserOptKey = "tracks-per-user"
+		roundsOptKey        = "rounds"
+	)
+
 	out = &TopTrackOptions{nil, "overall", 50, 10}
 
 	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
@@ -97,28 +105,51 @@ func ParseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionData
 		optionMap[option.Name] = option
 	}
 
-	if optionMap["users"] == nil {
-		return nil, errors.New("missing users")
+	usersOpt, ok := optionMap[usersOptKey]
+	if !ok || usersOpt == nil || usersOpt.StringValue() == "" {
+		return nil, errors.New("no users")
 	}
 
-	if optionMap["period"] != nil {
-		out.Period = optionMap["period"].StringValue()
+	if periodOpt, ok := optionMap[periodOptKey]; ok && periodOpt != nil {
+		out.Period = periodOpt.StringValue()
 	}
 
-	if optionMap["tracks-per-user"] != nil {
-		out.TracksPerUser = int(optionMap["tracks-per-user"].IntValue())
+	if tpuOpt, ok := optionMap[tracksPerUserOptKey]; ok && tpuOpt != nil {
+		out.TracksPerUser = int(tpuOpt.IntValue())
 	}
 
-	if optionMap["rounds"] != nil {
-		out.Rounds = int(optionMap["rounds"].IntValue())
+	if roundsOpt, ok := optionMap[roundsOptKey]; ok && roundsOpt != nil {
+		out.Rounds = int(roundsOpt.IntValue())
 	}
 
-	out.Users = strings.Split(optionMap["users"].StringValue(), " ")
+	out.Users = strings.Fields(usersOpt.StringValue())
 
 	return out, nil
 }
 
-func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func buildTopTracksStartResponseData(options *TopTrackOptions, usersSummary string) *discordgo.InteractionResponseData {
+	description := fmt.Sprintf(
+		"Starts a quiz using the top %d tracks from the past %s using the provided users:",
+		options.TracksPerUser, options.Period,
+	)
+
+	return &discordgo.InteractionResponseData{
+		Embeds: []*discordgo.MessageEmbed{
+			{
+				Title:       quizTitle,
+				Description: description,
+				Fields: []*discordgo.MessageEmbedField{
+					{
+						Name:  "Users",
+						Value: usersSummary,
+					},
+				},
+			},
+		},
+	}
+}
+
+func (ctx *Context) TopTracks(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	channel, err := internal.FindVoiceChat(s, i.GuildID, i.Member.User.ID)
 
 	if err != nil {
@@ -131,7 +162,7 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 		return
 	}
 
-	options, err := ParseTopTrackOptions(i.ApplicationCommandData().Options)
+	options, err := parseTopTrackOptions(i.ApplicationCommandData().Options)
 
 	if err != nil {
 		if err.Error() == "no users" {
@@ -144,21 +175,21 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 
 	var trackSlice = make([]tracks.LastfmTrack, len(options.Users)*options.TracksPerUser)
 
-	usersString := ""
+	usersSummary := ""
 
 	for i, user := range options.Users {
-		userTracks, err := context.Lm.User.GetTopTracks(lastfm.P{
+		userTracks, err := ctx.Lm.User.GetTopTracks(lastfm.P{
 			"user":   user,
 			"limit":  options.TracksPerUser,
 			"period": options.Period,
 		})
 		if err != nil {
 			log.Println(err)
-			usersString += fmt.Sprintf("- %s - not found\n", user)
+			usersSummary += fmt.Sprintf("- %s - not found\n", user)
 			continue
 		}
 
-		usersString += fmt.Sprintf("- %s - %d tracks\n", user, len(userTracks.Tracks))
+		usersSummary += fmt.Sprintf("- %s - %d tracks\n", user, len(userTracks.Tracks))
 
 		for j, track := range userTracks.Tracks {
 			trackSlice[i*options.TracksPerUser+j] = tracks.LastfmTrack{
@@ -172,31 +203,7 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 
 	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{
-				{
-					Title: "Top Tracks Quiz",
-					Description: fmt.Sprintf("Starts a top trackSlice quiz using the provided users with \n"+
-						"- Period %s\n"+
-						"- Text Channel %s\n"+
-						"- Voice Channel: %s", options.Period, i.ChannelID, channel),
-					Fields: []*discordgo.MessageEmbedField{
-						{
-							Name:  "Users",
-							Value: usersString,
-						},
-						{
-							Name:  "Period",
-							Value: options.Period,
-						},
-						{
-							Name:  "Max Tracks Per User",
-							Value: strconv.Itoa(options.TracksPerUser),
-						},
-					},
-				},
-			},
-		},
+		Data: buildTopTracksStartResponseData(options, usersSummary),
 	})
 
 	if err != nil {
@@ -205,7 +212,7 @@ func (context *Context) TopTracks(s *discordgo.Session, i *discordgo.Interaction
 	}
 
 	go func() {
-		err := context.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, trackSlice, options.Rounds)
+		err := ctx.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, trackSlice, options.Rounds)
 		if err != nil {
 			log.Println(fmt.Errorf("could not start quiz: %w", err))
 		}
