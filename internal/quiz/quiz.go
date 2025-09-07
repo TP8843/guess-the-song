@@ -33,7 +33,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 		return fmt.Errorf("error starting quiz session: %w", err)
 	}
 	defer func(quizSession *session.Session) {
-		err := quizSession.Close()
+		err := s.EndQuiz(guild)
 		if err != nil {
 			log.Printf("error closing quiz session: %v", err)
 		}
