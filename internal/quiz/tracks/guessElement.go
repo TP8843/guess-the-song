@@ -26,8 +26,7 @@ var (
 	reSquare = regexp.MustCompile("\\[.*]")
 	reDash   = regexp.MustCompile("-.*")
 	reFeat   = regexp.MustCompile("feat.*")
-	andRepl  = strings.NewReplacer("and", "&")
-	dotRepl  = strings.NewReplacer(".", "")
+	repl     = strings.NewReplacer("and", "&", ".", "", "-", "")
 )
 
 func NewGuessElement(value, category string, points int) *GuessElement {
@@ -69,8 +68,7 @@ func normaliseString(text string) string {
 	text = reSquare.ReplaceAllString(text, "")
 	text = reDash.ReplaceAllString(text, "")
 	text = reFeat.ReplaceAllString(text, "")
-	text = andRepl.Replace(text)
-	text = dotRepl.Replace(text)
+	text = repl.Replace(text)
 
 	text = strings.TrimSpace(text)
 	text = strings.TrimPrefix(text, "the ")
