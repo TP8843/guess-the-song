@@ -1,6 +1,7 @@
 package voice
 
 import (
+	"github.com/bwmarrin/discordgo"
 	"log"
 
 	"layeh.com/gopus"
@@ -29,7 +30,7 @@ func (s *Session) sendPCM() {
 			log.Println("error encoding PCM to opus, ", err)
 		}
 
-		if s.Vc.Ready == false || s.Vc.OpusSend == nil {
+		if s.Vc.Status != discordgo.VoiceConnectionStatusReady || s.Vc.OpusSend == nil {
 			log.Println("voice channel not ready for opus packets")
 			return
 		}
