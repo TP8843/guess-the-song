@@ -12,6 +12,7 @@ import (
 var (
 	commandList = []*discordgo.ApplicationCommand{
 		&commands.TopTrackCommand,
+		&commands.EndGameCommand,
 	}
 )
 
@@ -21,6 +22,7 @@ var commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.Interac
 
 func initCommandListener(commandContext *commands.Context) {
 	commandHandlers["top-tracks"] = commandContext.TopTracks
+	commandHandlers["end-game"] = commandContext.EndGame
 
 	registeredCommands = make([]*discordgo.ApplicationCommand, len(commandList))
 
