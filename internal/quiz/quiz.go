@@ -33,7 +33,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 		return fmt.Errorf("error starting quiz session: %w", err)
 	}
 	defer func(quizSession *session.Session) {
-		err := s.EndQuiz(guild)
+		err := s.endQuiz(guild)
 		if err != nil {
 			log.Printf("error closing quiz session: %v", err)
 		}
@@ -110,12 +110,6 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 		}
 
 		quiz.roundNumber += 1
-		end := quiz.round.GetEndGame()
-
-		// If true, end the game at this round
-		if end {
-			break
-		}
 	}
 
 	gameEndMessage := discordgo.MessageEmbed{
@@ -129,7 +123,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	}
 
 	quiz.mutex.Lock()
-	if !quiz.round.GetEndGame() && quiz.roundNumber <= rounds {
+	if quiz.roundNumber <= rounds {
 		gameEndMessage.Description = "Game ended early due to missing trackSlice on Deezer"
 	}
 	quiz.mutex.Unlock()
@@ -142,7 +136,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	return nil
 }
 
-func (s *State) EndQuiz(guild string) error {
+func (s *State) endQuiz(guild string) error {
 	if s.quizzes == nil {
 		return errors.New("no quizzes data structure")
 	}
