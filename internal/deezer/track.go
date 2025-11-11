@@ -7,29 +7,21 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
 
-func Search(trackName string, artist string) (*Track, error) {
+// GetTrack Get a track using a track ID
+func GetTrack(track int64) (*Track, error) {
 	const (
-		baseUrl = "https://api.deezer.com/search/track"
-		limit   = 1
+		baseUrl = "https://api.deezer.com/track/"
 	)
 
-	searchParams := fmt.Sprintf(`track:"%s" artist:"%s"`, trackName, artist)
-
-	req, err := http.NewRequest("GET", baseUrl, nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/%d", baseUrl, track), nil)
 	if err != nil {
 		log.Println(err)
 		return nil, fmt.Errorf("could not create request for track: %w", err)
 	}
-
-	q := req.URL.Query()
-	q.Add("q", searchParams)
-	q.Add("limit", strconv.Itoa(limit))
-	req.URL.RawQuery = q.Encode()
 
 	client := &http.Client{
 		Timeout: 10 * time.Second,
@@ -43,21 +35,21 @@ func Search(trackName string, artist string) (*Track, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, errors.New("not found")
+		}
+
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		err = fmt.Errorf("deezer returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 		log.Println(err)
 		return nil, err
 	}
 
-	responseBody := TrackSearchResponse{}
+	responseBody := Track{}
 	if err = json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
 		log.Println("error decoding deezer response,", err)
 		return nil, fmt.Errorf("could not decode deezer response: %w", err)
 	}
 
-	if responseBody.Total == 0 || len(responseBody.Data) == 0 {
-		return nil, errors.New("no match")
-	}
-
-	return &responseBody.Data[0], nil
+	return &responseBody, nil
 }
