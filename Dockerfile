@@ -1,13 +1,16 @@
 FROM golang:1.25-bookworm AS builder
 
-COPY . /app
-
 WORKDIR /app
 
 RUN apt-get update
 RUN apt-get install libopus-dev -y
 
+COPY go.mod go.sum ./
+COPY discordgo-patch-rework-vc ./discordgo-patch-rework-vc
+
 RUN go mod download
+
+COPY . ./
 
 RUN CGO_ENABLED=1 GOOS=linux go build -o /server
 

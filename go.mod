@@ -15,3 +15,5 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
+
+replace github.com/bwmarrin/discordgo => ./discordgo-patch-rework-vc

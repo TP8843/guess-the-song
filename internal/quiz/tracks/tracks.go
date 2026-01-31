@@ -55,7 +55,7 @@ func (tracks *Tracks) ChooseTrack() (*ResolvedTrack, error) {
 
 		tracks.remaining = append(tracks.remaining[:choicePosition], tracks.remaining[choicePosition+1:]...)
 
-		deezerResponse, err := deezer.Search(track.Name, track.Artist)
+		deezerSearch, err := deezer.Search(track.Name, track.Artist)
 		if err != nil && err.Error() == "no match" {
 			log.Printf("No match for %s - %s\n", track.Name, track.Artist)
 			continue
@@ -64,14 +64,39 @@ func (tracks *Tracks) ChooseTrack() (*ResolvedTrack, error) {
 			return nil, fmt.Errorf("error choosing track: %w", err)
 		}
 
+		deezerTrack, err := deezer.GetTrack(deezerSearch.ID)
+		if err != nil && err.Error() == "no match" {
+			log.Printf("No match for %s - %s\n", track.Name, track.Artist)
+			continue
+		} else if err != nil {
+			tracks.mutex.Unlock()
+			return nil, fmt.Errorf("error choosing track: %w", err)
+		}
+
+		//fmt.Println("Contributors:")
+		//for i := 0; i < len(deezerTrack.Contributors); i++ {
+		//	fmt.Printf("%d: %s (role: %s)\n", i, deezerTrack.Contributors[i].Name, deezerTrack.Contributors[i].Role)
+		//}
+
+		guessElements := make([]*GuessElement, len(deezerTrack.Contributors)+1)
+		for i := 0; i < len(deezerTrack.Contributors); i++ {
+			points := 1
+			if deezerTrack.Contributors[i].Role == "Main" {
+				points = 2
+			}
+
+			guessElements[i] = NewGuessElement(
+				deezerTrack.Contributors[i].Name,
+				fmt.Sprintf("%s Artist", deezerTrack.Contributors[i].Role),
+				points)
+		}
+		guessElements[len(deezerTrack.Contributors)] = NewGuessElement(track.Name, "Name", 2)
+
 		currentTrack = &ResolvedTrack{
 			Lastfm:        track,
-			DeezerPreview: deezerResponse.Preview,
-			DeezerUrl:     deezerResponse.Link,
-			GuessElements: []*GuessElement{
-				NewGuessElement(track.Name, "Name", 2),
-				NewGuessElement(track.Artist, "Artist", 2),
-			},
+			DeezerPreview: deezerSearch.Preview,
+			DeezerUrl:     deezerSearch.Link,
+			GuessElements: guessElements,
 		}
 	}
 

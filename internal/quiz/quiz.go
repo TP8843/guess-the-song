@@ -20,6 +20,8 @@ type Quiz struct {
 	round       *round.Round
 	roundNumber int // roundNumber current round number of quiz
 
+	endGame bool // endGame whether the quiz should be ended
+
 	tracks *tracks.Tracks
 
 	session *session.Session
@@ -33,7 +35,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 		return fmt.Errorf("error starting quiz session: %w", err)
 	}
 	defer func(quizSession *session.Session) {
-		err := s.EndQuiz(guild)
+		err := s.endQuiz(guild)
 		if err != nil {
 			log.Printf("error closing quiz session: %v", err)
 		}
@@ -42,6 +44,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	quiz := &Quiz{
 		tracks:      tracks.NewTracks(trackSlice),
 		points:      make(map[string]int),
+		endGame:     false,
 		roundNumber: 1,
 		session:     quizSession,
 		mutex:       sync.Mutex{},
@@ -109,13 +112,14 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 			log.Println(fmt.Errorf("could not send end of round message: %w", err))
 		}
 
-		quiz.roundNumber += 1
-		end := quiz.round.GetEndGame()
-
-		// If true, end the game at this round
-		if end {
+		quiz.mutex.Lock()
+		endGame := quiz.endGame
+		quiz.mutex.Unlock()
+		if endGame {
 			break
 		}
+
+		quiz.roundNumber += 1
 	}
 
 	gameEndMessage := discordgo.MessageEmbed{
@@ -129,7 +133,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	}
 
 	quiz.mutex.Lock()
-	if !quiz.round.GetEndGame() && quiz.roundNumber <= rounds {
+	if !quiz.endGame && quiz.roundNumber <= rounds {
 		gameEndMessage.Description = "Game ended early due to missing trackSlice on Deezer"
 	}
 	quiz.mutex.Unlock()
@@ -142,7 +146,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	return nil
 }
 
-func (s *State) EndQuiz(guild string) error {
+func (s *State) endQuiz(guild string) error {
 	if s.quizzes == nil {
 		return errors.New("no quizzes data structure")
 	}
@@ -178,4 +182,14 @@ func (q *Quiz) GeneratePointsString(s *discordgo.Session) string {
 	}
 
 	return pointsString
+}
+
+// EndGame End the current game as soon as possible
+func (q *Quiz) EndGame() {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+	q.endGame = true
+	if q.round != nil {
+		q.round.EndGame()
+	}
 }
