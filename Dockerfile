@@ -6,7 +6,6 @@ RUN apt-get update
 RUN apt-get install libopus-dev -y
 
 COPY go.mod go.sum ./
-COPY discordgo-patch-rework-vc ./discordgo-patch-rework-vc
 
 RUN go mod download
 

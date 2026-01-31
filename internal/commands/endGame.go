@@ -34,11 +34,7 @@ func (ctx *Context) EndGame(s *discordgo.Session, i *discordgo.InteractionCreate
 	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{
-				{
-					Description: "Ending current game",
-				},
-			},
+			Content: "Ending current game",
 		},
 	})
 }
