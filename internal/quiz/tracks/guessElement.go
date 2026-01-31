@@ -41,7 +41,7 @@ func NewGuessElement(value, category string, points int) *GuessElement {
 
 func (gE *GuessElement) CheckGuess(text string) bool {
 	// Only allow a guess once
-	if !gE.guessed && normaliseString(text) == gE.normalised {
+	if !gE.guessed && strings.Contains(normaliseString(text), gE.normalised) {
 		gE.guessed = true
 		return true
 	}

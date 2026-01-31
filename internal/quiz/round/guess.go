@@ -2,7 +2,7 @@ package round
 
 import "guess-the-song-discord/internal/quiz/tracks"
 
-func (round *Round) ProcessGuess(textChannel, user, guess string) *tracks.GuessElement {
+func (round *Round) ProcessGuess(textChannel, user, guess string) []*tracks.GuessElement {
 	round.mutex.Lock()
 	defer round.mutex.Unlock()
 
@@ -11,12 +11,12 @@ func (round *Round) ProcessGuess(textChannel, user, guess string) *tracks.GuessE
 		return nil
 	}
 
-	var result *tracks.GuessElement
+	result := make([]*tracks.GuessElement, 0)
 
 	for _, element := range round.currentTrack.GuessElements {
 		if element.CheckGuess(guess) {
 			round.guessTotal += 1
-			result = element
+			result = append(result, element)
 			round.roundPoints[user] += element.GetPoints()
 		}
 	}

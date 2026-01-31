@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"guess-the-song-discord/internal/quiz/tracks"
 	"log"
 
 	"github.com/bwmarrin/discordgo"
@@ -19,12 +20,12 @@ func (ctx *Context) HandleMessage(s *discordgo.Session, i *discordgo.MessageCrea
 		return
 	}
 
-	result := quiz.ProcessGuess(i.ChannelID, i.Author.ID, i.Content)
+	results := quiz.ProcessGuess(i.ChannelID, i.Author.ID, i.Content)
 
-	if result != nil {
+	if len(results) > 0 {
 		_, err := s.ChannelMessageSendEmbedReply(
 			i.ChannelID,
-			ctx.buildCorrectGuessEmbed(result.GetCategory(), result.GetValue(), result.GetPoints()),
+			ctx.buildCorrectGuessEmbed(results),
 			i.SoftReference(),
 		)
 		if err != nil {
@@ -33,19 +34,28 @@ func (ctx *Context) HandleMessage(s *discordgo.Session, i *discordgo.MessageCrea
 	}
 }
 
-func (ctx *Context) buildCorrectGuessEmbed(category, value string, points int) *discordgo.MessageEmbed {
-	plural := ""
-	if points != 1 {
-		plural = "s"
+func (ctx *Context) buildCorrectGuessEmbed(results []*tracks.GuessElement) *discordgo.MessageEmbed {
+	messageEmbed := &discordgo.MessageEmbed{
+		Title:  "Correct!",
+		Fields: []*discordgo.MessageEmbedField{},
 	}
 
-	return &discordgo.MessageEmbed{
-		Description: fmt.Sprintf(
-			"Correct! %s is **%s** (+%d point%s)",
-			category,
-			value,
-			points,
-			plural,
-		),
+	for _, result := range results {
+		plural := ""
+		if result.GetPoints() != 1 {
+			plural = "s"
+		}
+
+		messageEmbed.Fields = append(messageEmbed.Fields, &discordgo.MessageEmbedField{
+			Value: fmt.Sprintf(
+				"%s is **%s** (+%d point%s)",
+				result.GetCategory(),
+				result.GetValue(),
+				result.GetPoints(),
+				plural,
+			),
+		})
 	}
+
+	return messageEmbed
 }
