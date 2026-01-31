@@ -1,7 +1,6 @@
 package voice
 
 import (
-	"context"
 	"log"
 	"sync"
 
@@ -22,7 +21,7 @@ type Session struct {
 // JoinVoiceSession Joins a voice channel.
 // autoDisconnect: if true, disconnects when all members leave the call
 func JoinVoiceSession(s *discordgo.Session, guildId, channelId string) (*Session, error) {
-	vc, err := s.ChannelVoiceJoin(context.Background(), guildId, channelId, false, true)
+	vc, err := s.ChannelVoiceJoin(guildId, channelId, false, true)
 	if err != nil {
 		log.Println("error joining voice", err)
 		return nil, err
@@ -47,5 +46,5 @@ func JoinVoiceSession(s *discordgo.Session, guildId, channelId string) (*Session
 // Close Closes a currently running voice session, stopping all playback and closing all processing
 func (s *Session) Close() error {
 	close(s.pcm)
-	return s.Vc.Disconnect(context.Background())
+	return s.Vc.Disconnect()
 }
