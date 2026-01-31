@@ -127,23 +127,19 @@ func parseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionData
 	return out, nil
 }
 
-func buildTopTracksStartResponseData(options *TopTrackOptions, usersSummary string) *discordgo.InteractionResponseData {
+func buildTopTracksStartResponseData(options *TopTrackOptions, usersSummary string) *discordgo.MessageEmbed {
 	description := fmt.Sprintf(
 		"Starts a quiz using the top %d tracks from the past %s using the provided users:",
 		options.TracksPerUser, options.Period,
 	)
 
-	return &discordgo.InteractionResponseData{
-		Embeds: []*discordgo.MessageEmbed{
+	return &discordgo.MessageEmbed{
+		Title:       quizTitle,
+		Description: description,
+		Fields: []*discordgo.MessageEmbedField{
 			{
-				Title:       quizTitle,
-				Description: description,
-				Fields: []*discordgo.MessageEmbedField{
-					{
-						Name:  "Users",
-						Value: usersSummary,
-					},
-				},
+				Name:  "Users",
+				Value: usersSummary,
 			},
 		},
 	}
@@ -173,11 +169,24 @@ func (ctx *Context) TopTracks(s *discordgo.Session, i *discordgo.InteractionCrea
 		return
 	}
 
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Please wait while tracks are fetched from Last.fm",
+		},
+	})
+
+	if err != nil {
+		log.Println(fmt.Errorf("error sending interaction response: %w", err))
+		return
+	}
+
 	var trackSlice = make([]tracks.LastfmTrack, len(options.Users)*options.TracksPerUser)
 
+	userCountString := ""
 	usersSummary := ""
 
-	for i, user := range options.Users {
+	for j, user := range options.Users {
 		userTracks, err := ctx.Lm.User.GetTopTracks(lastfm.P{
 			"user":   user,
 			"limit":  options.TracksPerUser,
@@ -191,23 +200,35 @@ func (ctx *Context) TopTracks(s *discordgo.Session, i *discordgo.InteractionCrea
 
 		usersSummary += fmt.Sprintf("- %s - %d tracks\n", user, len(userTracks.Tracks))
 
-		for j, track := range userTracks.Tracks {
-			trackSlice[i*options.TracksPerUser+j] = tracks.LastfmTrack{
+		for k, track := range userTracks.Tracks {
+			trackSlice[j*options.TracksPerUser+k] = tracks.LastfmTrack{
 				LastfmUrl: track.Url,
 				Name:      track.Name,
 				Artist:    track.Artist.Name,
 				User:      user,
 			}
 		}
+
+		userCountString = fmt.Sprintf("Fetched %d users", j+1)
+
+		_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &userCountString,
+		})
+
+		if err != nil {
+			log.Println(fmt.Errorf("error updating interaction response: %w", err))
+			return
+		}
 	}
 
-	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: buildTopTracksStartResponseData(options, usersSummary),
+	_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Embeds: &[]*discordgo.MessageEmbed{
+			buildTopTracksStartResponseData(options, usersSummary),
+		},
 	})
 
 	if err != nil {
-		log.Println(err)
+		log.Println(fmt.Errorf("error updating interaction response: %w", err))
 		return
 	}
 
