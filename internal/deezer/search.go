@@ -18,7 +18,9 @@ func Search(trackName string, artist string) (*Track, error) {
 		limit   = 1
 	)
 
-	searchParams := fmt.Sprintf(`track:"%s" artist:"%s"`, trackName, artist)
+	// Fuzzier search returns better results
+	//searchParams := fmt.Sprintf(`track:"%s" artist:"%s"`, trackName, artist)
+	searchParams := fmt.Sprintf("%s %s", trackName, artist)
 
 	req, err := http.NewRequest("GET", baseUrl, nil)
 	if err != nil {

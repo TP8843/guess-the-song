@@ -16,6 +16,7 @@ func CommandErrorResponse(s *discordgo.Session, i *discordgo.InteractionCreate, 
 				{
 					Title:       "Something went wrong :(",
 					Description: message,
+					Color:       0xFF0000,
 				},
 			},
 		},
