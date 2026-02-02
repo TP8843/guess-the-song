@@ -30,6 +30,14 @@ type Quiz struct {
 }
 
 func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []tracks.LastfmTrack, rounds int) error {
+	// Sanity checks
+	if s.quizzes == nil {
+		return errors.New("no quizzes data structure")
+	}
+	if s.quizzes[guild] != nil {
+		return errors.New("quiz already exists for this guild")
+	}
+
 	quizSession, err := session.StartSession(s.Session, guild, textChannel, voiceChannel)
 	if err != nil {
 		return fmt.Errorf("error starting quiz session: %w", err)
@@ -48,14 +56,6 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 		roundNumber: 1,
 		session:     quizSession,
 		mutex:       sync.Mutex{},
-	}
-
-	if s.quizzes == nil {
-		return errors.New("no quizzes data structure")
-	}
-
-	if s.quizzes[guild] != nil {
-		return errors.New("quiz already exists for this guild")
 	}
 
 	// Lock before adding quiz to the main store
@@ -88,26 +88,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 			quiz.points[user] += points
 		}
 
-		_, err = s.Session.ChannelMessageSendEmbed(quiz.session.TextChannel(), &discordgo.MessageEmbed{
-			Title: fmt.Sprintf("Round %d End", quiz.roundNumber),
-			Fields: []*discordgo.MessageEmbedField{
-				{
-					Name: "Track",
-					Value: fmt.Sprintf("%s - %s (from [%s](https://last.fm/user/%s))\n [Last.fm](%s) [Deezer](%s)",
-						track.Lastfm.Name,
-						track.Lastfm.Artist,
-						track.Lastfm.User,
-						track.Lastfm.User,
-						track.Lastfm.LastfmUrl,
-						track.DeezerUrl,
-					),
-				},
-				{
-					Name:  "Points",
-					Value: quiz.GeneratePointsString(s.Session),
-				},
-			},
-		})
+		_, err = s.Session.ChannelMessageSendEmbed(quiz.session.TextChannel(), quiz.GenerateRoundEmbed(s.Session))
 		if err != nil {
 			log.Println(fmt.Errorf("could not send end of round message: %w", err))
 		}
@@ -127,7 +108,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:  "Points",
-				Value: quiz.GeneratePointsString(s.Session),
+				Value: quiz.generatePointsString(s.Session),
 			},
 		},
 	}
@@ -168,8 +149,8 @@ func (s *State) endQuiz(guild string) error {
 	return nil
 }
 
-// GeneratePointsString Generate a bullet point list of all players and their current points
-func (q *Quiz) GeneratePointsString(s *discordgo.Session) string {
+// generatePointsString Generate a bullet point list of all players and their current points
+func (q *Quiz) generatePointsString(s *discordgo.Session) string {
 	var pointsString string
 	for user, points := range q.points {
 		user, err := s.User(user)
@@ -182,6 +163,32 @@ func (q *Quiz) GeneratePointsString(s *discordgo.Session) string {
 	}
 
 	return pointsString
+}
+
+// GenerateRoundEmbed Generate the embed for updated information at end of round
+func (q *Quiz) GenerateRoundEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
+	track := q.round.GetCurrentTrack()
+
+	return &discordgo.MessageEmbed{
+		Title: fmt.Sprintf("Round %d End", q.roundNumber),
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name: "Track",
+				Value: fmt.Sprintf("%s - %s (from [%s](https://last.fm/user/%s))\n [Last.fm](%s) [Deezer](%s)",
+					track.Lastfm.Name,
+					track.Lastfm.Artist,
+					track.Lastfm.User,
+					track.Lastfm.User,
+					track.Lastfm.LastfmUrl,
+					track.DeezerUrl,
+				),
+			},
+			{
+				Name:  "Points",
+				Value: q.generatePointsString(s),
+			},
+		},
+	}
 }
 
 // EndGame End the current game as soon as possible

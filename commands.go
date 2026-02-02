@@ -11,7 +11,7 @@ import (
 
 var (
 	commandList = []*discordgo.ApplicationCommand{
-		&commands.TopTrackCommand,
+		&commands.GuessTheSongCommand,
 		&commands.EndGameCommand,
 	}
 )
@@ -20,9 +20,9 @@ var registeredCommands []*discordgo.ApplicationCommand
 
 var commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){}
 
-func initCommandListener(commandContext *commands.Context) {
-	commandHandlers["top-tracks"] = commandContext.TopTracks
-	commandHandlers["end-game"] = commandContext.EndGame
+func initCommandListener(quizContext *commands.Context) {
+	commandHandlers["guess-the-song"] = quizContext.GuessTheSong
+	commandHandlers["end-game"] = quizContext.EndGame
 
 	registeredCommands = make([]*discordgo.ApplicationCommand, len(commandList))
 

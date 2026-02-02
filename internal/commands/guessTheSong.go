@@ -12,7 +12,7 @@ import (
 	"github.com/shkh/lastfm-go/lastfm"
 )
 
-type TopTrackOptions struct {
+type GuessTheSongOptions struct {
 	Users         []string
 	Period        string
 	TracksPerUser int
@@ -29,8 +29,8 @@ var (
 )
 
 var (
-	TopTrackCommand = discordgo.ApplicationCommand{
-		Name:        "top-tracks",
+	GuessTheSongCommand = discordgo.ApplicationCommand{
+		Name:        "guess-the-song",
 		Description: "Starts a quiz using the top tracks of each user through Last.fm",
 		Type:        discordgo.ChatApplicationCommand,
 		Options: []*discordgo.ApplicationCommandOption{
@@ -56,7 +56,7 @@ var (
 			},
 			{
 				Name:        "period",
-				Description: "Period to take top tracks from (default: overall)",
+				Description: "Period to take tracks from (default: overall)",
 				Type:        discordgo.ApplicationCommandOptionString,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{
@@ -64,23 +64,23 @@ var (
 						Value: "overall",
 					},
 					{
-						Name:  "Week",
+						Name:  "week",
 						Value: "7days",
 					},
 					{
-						Name:  "Month",
+						Name:  "month",
 						Value: "1month",
 					},
 					{
-						Name:  "3 Months",
+						Name:  "3 months",
 						Value: "3month",
 					},
 					{
-						Name:  "6 Months",
+						Name:  "6 months",
 						Value: "6month",
 					},
 					{
-						Name:  "Year",
+						Name:  "year",
 						Value: "12month",
 					},
 				},
@@ -89,8 +89,8 @@ var (
 	}
 )
 
-// parseTopTrackOptions Puts all data passed in through options into a struct
-func parseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (out *TopTrackOptions, err error) {
+// parseCommandOptions Puts all data passed in through options into a struct
+func parseCommandOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (out *GuessTheSongOptions, err error) {
 	const (
 		usersOptKey         = "users"
 		periodOptKey        = "period"
@@ -98,7 +98,13 @@ func parseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionData
 		roundsOptKey        = "rounds"
 	)
 
-	out = &TopTrackOptions{nil, "overall", 50, 10}
+	// Default options
+	out = &GuessTheSongOptions{
+		Users:         nil,
+		Period:        "overall",
+		TracksPerUser: 50,
+		Rounds:        10,
+	}
 
 	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
 	for _, option := range options {
@@ -127,7 +133,7 @@ func parseTopTrackOptions(options []*discordgo.ApplicationCommandInteractionData
 	return out, nil
 }
 
-func buildTopTracksStartResponseData(options *TopTrackOptions, usersSummary string) *discordgo.MessageEmbed {
+func buildGuessTheSongResponse(options *GuessTheSongOptions, usersSummary string) *discordgo.MessageEmbed {
 	description := fmt.Sprintf(
 		"Starts a quiz using the top %d tracks from the past %s using the provided users:",
 		options.TracksPerUser, options.Period,
@@ -145,7 +151,7 @@ func buildTopTracksStartResponseData(options *TopTrackOptions, usersSummary stri
 	}
 }
 
-func (ctx *Context) TopTracks(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	channel, err := internal.FindVoiceChat(s, i.GuildID, i.Member.User.ID)
 
 	if err != nil {
@@ -158,7 +164,7 @@ func (ctx *Context) TopTracks(s *discordgo.Session, i *discordgo.InteractionCrea
 		return
 	}
 
-	options, err := parseTopTrackOptions(i.ApplicationCommandData().Options)
+	options, err := parseCommandOptions(i.ApplicationCommandData().Options)
 
 	if err != nil {
 		if err.Error() == "no users" {
@@ -209,7 +215,7 @@ func (ctx *Context) TopTracks(s *discordgo.Session, i *discordgo.InteractionCrea
 			}
 		}
 
-		userCountString = fmt.Sprintf("Fetched %d users", j+1)
+		userCountString = fmt.Sprintf("Fetched %d users...", j+1)
 
 		_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Content: &userCountString,
@@ -221,9 +227,11 @@ func (ctx *Context) TopTracks(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 	}
 
+	userCountString = "Fetched all users"
 	_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &userCountString,
 		Embeds: &[]*discordgo.MessageEmbed{
-			buildTopTracksStartResponseData(options, usersSummary),
+			buildGuessTheSongResponse(options, usersSummary),
 		},
 	})
 
