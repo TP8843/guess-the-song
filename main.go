@@ -55,9 +55,9 @@ func init() {
 }
 
 func init() {
-	ctx := commands.NewContext(quiz.NewState(s), lm)
-	initCommandListener(ctx)
-	s.AddHandler(ctx.HandleMessage)
+	commandContext := commands.NewContext(quiz.NewState(s), lm)
+	initCommandListener(commandContext)
+	s.AddHandler(commandContext.HandleMessage)
 }
 
 func main() {

@@ -80,16 +80,14 @@ func (tracks *Tracks) ChooseTrack() (*ResolvedTrack, error) {
 
 		guessElements := make([]*GuessElement, len(deezerTrack.Contributors)+1)
 		for i := 0; i < len(deezerTrack.Contributors); i++ {
-			artistType := "Featured"
 			points := 1
-			if deezerTrack.Contributors[i].Name == deezerTrack.Artist.Name {
-				artistType = "Main"
+			if deezerTrack.Contributors[i].Role == "Main" {
 				points = 2
 			}
 
 			guessElements[i] = NewGuessElement(
 				deezerTrack.Contributors[i].Name,
-				fmt.Sprintf("%s Artist", artistType),
+				fmt.Sprintf("%s Artist", deezerTrack.Contributors[i].Role),
 				points)
 		}
 		guessElements[len(deezerTrack.Contributors)] = NewGuessElement(track.Name, "Name", 2)
