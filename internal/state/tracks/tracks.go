@@ -26,8 +26,8 @@ type ResolvedTrack struct {
 }
 
 type Tracks struct {
-	tracks    []LastfmTrack // tracks all the track to be used in the quiz
-	remaining []int         // remaining all the tracks not yet used in the quiz
+	tracks    []LastfmTrack // tracks all the track to be used in the state
+	remaining []int         // remaining all the tracks not yet used in the state
 	mutex     sync.Mutex
 }
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"guess-the-song-discord/internal"
 	"guess-the-song-discord/internal/commands"
-	"guess-the-song-discord/internal/quiz"
+	"guess-the-song-discord/internal/state"
 	"log"
 	"os"
 	"os/signal"
@@ -55,7 +55,7 @@ func init() {
 }
 
 func init() {
-	ctx := commands.NewContext(quiz.NewState(s), lm)
+	ctx := commands.NewContext(state.NewState(s), lm)
 	initCommandListener(ctx)
 	s.AddHandler(ctx.HandleMessage)
 }

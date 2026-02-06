@@ -3,8 +3,8 @@ package round
 import (
 	"errors"
 	"fmt"
-	"guess-the-song-discord/internal/quiz/session"
-	"guess-the-song-discord/internal/quiz/tracks"
+	"guess-the-song-discord/internal/state/session"
+	"guess-the-song-discord/internal/state/tracks"
 	"sync"
 )
 

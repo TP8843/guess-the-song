@@ -1,11 +1,11 @@
-package quiz
+package state
 
 import (
 	"errors"
 	"fmt"
-	"guess-the-song-discord/internal/quiz/round"
-	"guess-the-song-discord/internal/quiz/session"
-	"guess-the-song-discord/internal/quiz/tracks"
+	"guess-the-song-discord/internal/state/round"
+	"guess-the-song-discord/internal/state/session"
+	"guess-the-song-discord/internal/state/tracks"
 	"log"
 	"sync"
 	"time"
@@ -13,14 +13,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// Quiz Handles current state for a quiz in the server
+// Quiz Handles current state for a state in the server
 type Quiz struct {
 	points map[string]int // points map of discord user ids to
 
 	round       *round.Round
-	roundNumber int // roundNumber current round number of quiz
+	roundNumber int // roundNumber current round number of state
 
-	endGame bool // endGame whether the quiz should be ended
+	endGame bool // endGame whether the state should be ended
 
 	tracks *tracks.Tracks
 
@@ -35,17 +35,17 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 		return errors.New("no quizzes data structure")
 	}
 	if s.quizzes[guild] != nil {
-		return errors.New("quiz already exists for this guild")
+		return errors.New("state already exists for this guild")
 	}
 
 	quizSession, err := session.StartSession(s.Session, guild, textChannel, voiceChannel)
 	if err != nil {
-		return fmt.Errorf("error starting quiz session: %w", err)
+		return fmt.Errorf("error starting state session: %w", err)
 	}
 	defer func(quizSession *session.Session) {
 		err := s.endQuiz(guild)
 		if err != nil {
-			log.Printf("error closing quiz session: %v", err)
+			log.Printf("error closing state session: %v", err)
 		}
 	}(quizSession)
 
@@ -58,7 +58,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 		mutex:       sync.Mutex{},
 	}
 
-	// Lock before adding quiz to the main store
+	// Lock before adding state to the main store
 	quiz.mutex.Lock()
 	s.quizzes[guild] = quiz
 	quiz.mutex.Unlock()
@@ -133,7 +133,7 @@ func (s *State) endQuiz(guild string) error {
 	}
 
 	if s.quizzes[guild] == nil {
-		return fmt.Errorf("no quiz found with guild id %s", guild)
+		return fmt.Errorf("no state found with guild id %s", guild)
 	}
 
 	quiz := s.quizzes[guild]
@@ -143,7 +143,7 @@ func (s *State) endQuiz(guild string) error {
 
 	err := quiz.session.Close()
 	if err != nil {
-		return fmt.Errorf("ended quiz but could not leave voice: %w", err)
+		return fmt.Errorf("ended state but could not leave voice: %w", err)
 	}
 
 	return nil

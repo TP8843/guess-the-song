@@ -1,4 +1,4 @@
-package quiz
+package state
 
 import (
 	"errors"
@@ -19,7 +19,7 @@ func NewState(session *discordgo.Session) *State {
 	}
 }
 
-// HasQuiz returns whether there is a quiz running in the guild
+// HasQuiz returns whether there is a state running in the guild
 func (s *State) HasQuiz(guild string) bool {
 	if s.quizzes == nil {
 		return false
@@ -32,14 +32,14 @@ func (s *State) HasQuiz(guild string) bool {
 	return true
 }
 
-// GetQuiz gets the quiz for the associated guild
+// GetQuiz gets the state for the associated guild
 func (s *State) GetQuiz(guild string) (*Quiz, error) {
 	if s.quizzes == nil {
 		return nil, errors.New("no quizzes data structure")
 	}
 
 	if s.quizzes[guild] == nil {
-		return nil, fmt.Errorf("no quiz found with guild id %s", guild)
+		return nil, fmt.Errorf("no state found with guild id %s", guild)
 	}
 
 	return s.quizzes[guild], nil

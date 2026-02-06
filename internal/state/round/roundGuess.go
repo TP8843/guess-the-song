@@ -1,6 +1,6 @@
 package round
 
-import "guess-the-song-discord/internal/quiz/tracks"
+import "guess-the-song-discord/internal/state/tracks"
 
 func (round *Round) ProcessGuess(textChannel, user, guess string) []*tracks.GuessElement {
 	round.mutex.Lock()

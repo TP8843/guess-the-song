@@ -19,13 +19,13 @@ var (
 // EndGame End the game currently running in the server
 func (ctx *Context) EndGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !ctx.quizState.HasQuiz(i.GuildID) {
-		internal.CommandErrorResponse(s, i, "No quiz currently running in server.")
+		internal.CommandErrorResponse(s, i, "No state currently running in server.")
 		return
 	}
 
 	quiz, err := ctx.quizState.GetQuiz(i.GuildID)
 	if err != nil {
-		log.Println(fmt.Errorf("could not get quiz: %w", err))
+		log.Println(fmt.Errorf("could not get state: %w", err))
 		return
 	}
 

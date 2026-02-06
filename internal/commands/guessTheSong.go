@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"guess-the-song-discord/internal"
-	"guess-the-song-discord/internal/quiz/tracks"
+	"guess-the-song-discord/internal/state/tracks"
 	"log"
 	"strings"
 
@@ -31,12 +31,12 @@ var (
 var (
 	GuessTheSongCommand = discordgo.ApplicationCommand{
 		Name:        "guess-the-song",
-		Description: "Starts a quiz using the top tracks of each user through Last.fm",
+		Description: "Starts a state using the top tracks of each user through Last.fm",
 		Type:        discordgo.ChatApplicationCommand,
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "users",
-				Description: "Space separated list of users to take part in quiz",
+				Description: "Space separated list of users to take part in state",
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
@@ -135,7 +135,7 @@ func parseCommandOptions(options []*discordgo.ApplicationCommandInteractionDataO
 
 func buildGuessTheSongResponse(options *GuessTheSongOptions, usersSummary string) *discordgo.MessageEmbed {
 	description := fmt.Sprintf(
-		"Starts a quiz using the top %d tracks from the past %s using the provided users:",
+		"Starts a state using the top %d tracks from the past %s using the provided users:",
 		options.TracksPerUser, options.Period,
 	)
 
@@ -156,7 +156,7 @@ func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionC
 
 	if err != nil {
 		if err.Error() == "user not in voice channel" {
-			internal.CommandErrorResponse(s, i, "You must be inside a voice channel to start a quiz")
+			internal.CommandErrorResponse(s, i, "You must be inside a voice channel to start a state")
 			return
 		}
 
@@ -168,7 +168,7 @@ func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionC
 
 	if err != nil {
 		if err.Error() == "no users" {
-			internal.CommandErrorResponse(s, i, "You must enter space separated Last.fm usernames to use for the quiz")
+			internal.CommandErrorResponse(s, i, "You must enter space separated Last.fm usernames to use for the state")
 		}
 
 		log.Println(err)
@@ -243,7 +243,7 @@ func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionC
 	go func() {
 		err := ctx.quizState.StartQuiz(i.GuildID, i.ChannelID, channel, trackSlice, options.Rounds)
 		if err != nil {
-			log.Println(fmt.Errorf("could not start quiz: %w", err))
+			log.Println(fmt.Errorf("could not start state: %w", err))
 		}
 	}()
 }

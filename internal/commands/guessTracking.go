@@ -2,21 +2,21 @@ package commands
 
 import (
 	"fmt"
-	"guess-the-song-discord/internal/quiz/tracks"
+	"guess-the-song-discord/internal/state/tracks"
 	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func (ctx *Context) HandleMessage(s *discordgo.Session, i *discordgo.MessageCreate) {
-	// If no quiz is running, ignore
+	// If no state is running, ignore
 	if !ctx.quizState.HasQuiz(i.GuildID) {
 		return
 	}
 
 	quiz, err := ctx.quizState.GetQuiz(i.GuildID)
 	if err != nil {
-		log.Println(fmt.Errorf("could not get quiz: %w", err))
+		log.Println(fmt.Errorf("could not get state: %w", err))
 		return
 	}
 
