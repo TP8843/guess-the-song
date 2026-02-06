@@ -35,7 +35,7 @@ func (s *State) HasQuiz(guild string) bool {
 // GetQuiz gets the state for the associated guild
 func (s *State) GetQuiz(guild string) (*Quiz, error) {
 	if s.quizzes == nil {
-		return nil, errors.New("no quizzes data structure")
+		return nil, errors.New("no quizzes database structure")
 	}
 
 	if s.quizzes[guild] == nil {

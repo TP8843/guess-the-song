@@ -32,7 +32,7 @@ type Quiz struct {
 func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []tracks.LastfmTrack, rounds int) error {
 	// Sanity checks
 	if s.quizzes == nil {
-		return errors.New("no quizzes data structure")
+		return errors.New("no quizzes database structure")
 	}
 	if s.quizzes[guild] != nil {
 		return errors.New("state already exists for this guild")
@@ -129,7 +129,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 
 func (s *State) endQuiz(guild string) error {
 	if s.quizzes == nil {
-		return errors.New("no quizzes data structure")
+		return errors.New("no quizzes database structure")
 	}
 
 	if s.quizzes[guild] == nil {

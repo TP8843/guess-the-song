@@ -20,6 +20,7 @@ const (
 	EnvLastFMKey    = "LASTFM_KEY"
 	EnvLastFMSecret = "LASTFM_SECRET"
 	EnvGuildID      = "GUILD_ID"
+	EnvDbPath       = "DB_PATH"
 )
 
 var (
@@ -27,6 +28,7 @@ var (
 	LastFMKey    = flag.String("lastfm_key", "", "LastFM API key")
 	LastFMSecret = flag.String("lastfm_secret", "", "LastFM secret")
 	GuildID      = flag.String("guild", "", "Guild ID - Empty for all guilds")
+	DbPath       = flag.String("db", "", "Path to database file - empty for cwd/database.db")
 )
 
 var s *discordgo.Session
@@ -36,10 +38,11 @@ var lm *lastfm.Api
 func init() {
 	flag.Parse()
 
-	internal.SetFromEnv(BotToken, EnvBotToken)
-	internal.SetFromEnv(LastFMKey, EnvLastFMKey)
-	internal.SetFromEnv(LastFMSecret, EnvLastFMSecret)
-	internal.SetFromEnv(GuildID, EnvGuildID)
+	internal.SetFromEnv(BotToken, EnvBotToken, "")
+	internal.SetFromEnv(LastFMKey, EnvLastFMKey, "")
+	internal.SetFromEnv(LastFMSecret, EnvLastFMSecret, "")
+	internal.SetFromEnv(GuildID, EnvGuildID, "")
+	internal.SetFromEnv(DbPath, EnvDbPath, "./database.db")
 }
 
 func init() {

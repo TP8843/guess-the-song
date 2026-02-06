@@ -49,12 +49,14 @@ func FindVoiceChat(s *discordgo.Session, guildId string, userId string) (channel
 }
 
 // SetFromEnv sets the value of a variable from an environment variable
-func SetFromEnv(target *string, envKey string) {
+func SetFromEnv(target *string, envKey string, defaultValue string) {
 	if *target != "" {
 		return
 	}
 
 	if v := os.Getenv(envKey); v != "" {
 		*target = v
+	} else {
+		*target = defaultValue
 	}
 }
