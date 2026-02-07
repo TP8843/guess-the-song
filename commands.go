@@ -13,6 +13,8 @@ var (
 	commandList = []*discordgo.ApplicationCommand{
 		&commands.GuessTheSongCommand,
 		&commands.EndGameCommand,
+		&commands.LinkUserCommand,
+		&commands.UnlinkUserCommand,
 	}
 )
 
@@ -23,6 +25,8 @@ var commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.Interac
 func initCommandListener(quizContext *commands.Context) {
 	commandHandlers["guess-the-song"] = quizContext.GuessTheSong
 	commandHandlers["end-game"] = quizContext.EndGame
+	commandHandlers["link"] = quizContext.LinkUser
+	commandHandlers["unlink"] = quizContext.UnlinkUser
 
 	registeredCommands = make([]*discordgo.ApplicationCommand, len(commandList))
 

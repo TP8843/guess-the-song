@@ -27,6 +27,24 @@ func CommandErrorResponse(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	}
 }
 
+func CommandSuccessResponse(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{
+				{
+					Title: message,
+					Color: 0x00FF00,
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 func FindVoiceChat(s *discordgo.Session, guildId string, userId string) (channel string, err error) {
 	guild, err := s.State.Guild(guildId)
 

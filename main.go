@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"guess-the-song-discord/internal"
 	"guess-the-song-discord/internal/commands"
+	"guess-the-song-discord/internal/database"
 	"guess-the-song-discord/internal/state"
 	"log"
 	"os"
@@ -32,8 +33,8 @@ var (
 )
 
 var s *discordgo.Session
-
 var lm *lastfm.Api
+var db *database.Connection
 
 func init() {
 	flag.Parse()
@@ -55,10 +56,16 @@ func init() {
 	}
 
 	lm = lastfm.New(*LastFMKey, *LastFMSecret)
+
+	db, err = database.NewConnection(*DbPath)
+	if err != nil {
+		fmt.Println("error creating database connection,", err)
+		return
+	}
 }
 
 func init() {
-	ctx := commands.NewContext(state.NewState(s), lm)
+	ctx := commands.NewContext(state.NewState(s), lm, db)
 	initCommandListener(ctx)
 	s.AddHandler(ctx.HandleMessage)
 }

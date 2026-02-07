@@ -89,8 +89,8 @@ var (
 	}
 )
 
-// parseCommandOptions Puts all data passed in through options into a struct
-func parseCommandOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (out *GuessTheSongOptions, err error) {
+// parseGuessTheSongOptions Puts all data passed in through options into a struct
+func parseGuessTheSongOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (out *GuessTheSongOptions, err error) {
 	const (
 		usersOptKey         = "users"
 		periodOptKey        = "period"
@@ -164,7 +164,7 @@ func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionC
 		return
 	}
 
-	options, err := parseCommandOptions(i.ApplicationCommandData().Options)
+	options, err := parseGuessTheSongOptions(i.ApplicationCommandData().Options)
 
 	if err != nil {
 		if err.Error() == "no users" {

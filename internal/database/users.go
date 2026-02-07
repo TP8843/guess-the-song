@@ -6,9 +6,7 @@ import (
 )
 
 func (conn *Connection) CreateUserTable() error {
-	sqlStmt := `
-	CREATE TABLE IF NOT EXISTS users (id integer NOT NULL PRIMARY KEY, lastfm text)
-	`
+	sqlStmt := `CREATE TABLE IF NOT EXISTS users (id TEXT NOT NULL PRIMARY KEY, lastfm TEXT) WITHOUT ROWID`
 
 	_, err := conn.db.Exec(sqlStmt)
 	if err != nil {
@@ -18,14 +16,15 @@ func (conn *Connection) CreateUserTable() error {
 	return nil
 }
 
-func (conn *Connection) LinkUser(discord int64, lastfm string) error {
+func (conn *Connection) LinkUser(discord string, lastfm string) error {
 
 	// Check for existing user: if exists, just replace lastfm
 	row := conn.db.QueryRow(
-		`SELECT 1 FROM TABLE ( users ) WHERE (id = ?) LIMIT 1`,
+		`SELECT 1 FROM users WHERE (id = ?) LIMIT 1`,
 		discord,
 	)
-	err := row.Scan()
+	var temp int
+	err := row.Scan(&temp)
 	// Just update user if user already exists
 	if err == nil {
 		_, err = conn.db.Exec(
@@ -52,7 +51,7 @@ func (conn *Connection) LinkUser(discord int64, lastfm string) error {
 	return nil
 }
 
-func (conn *Connection) UnlinkUser(discord int64) error {
+func (conn *Connection) UnlinkUser(discord string) error {
 	sqlStmt := `DELETE FROM users WHERE (id = ?)`
 
 	_, err := conn.db.Exec(sqlStmt, discord)
@@ -62,7 +61,7 @@ func (conn *Connection) UnlinkUser(discord int64) error {
 	return nil
 }
 
-func (conn *Connection) GetUsernames(discord []int64) ([]string, error) {
+func (conn *Connection) GetUsernames(discord []string) ([]string, error) {
 	if len(discord) == 0 {
 		return []string{}, nil
 	}
