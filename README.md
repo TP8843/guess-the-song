@@ -62,10 +62,10 @@ You can configure the bot using either command-line arguments or environment var
 
 ### Using arguments:
 macOS/Linux:
-- `./guess-the-song-discord -token "YOUR_DISCORD_TOKEN" -lastfm_key "YOUR_LASTFM_KEY" -lastfm_secret "YOUR_LASTFM_SECRET" -guild "YOUR_GUILD_ID"`
+- `./guess-the-song-discord -token "YOUR_DISCORD_TOKEN" -lastfm_key "YOUR_LASTFM_KEY" -lastfm_secret "YOUR_LASTFM_SECRET" -guild "YOUR_GUILD_ID" -db "/path/to/db/file.db"`
 
 Windows (PowerShell):
-- `.\guess-the-song-discord.exe -token "YOUR_DISCORD_TOKEN" -lastfm_key "YOUR_LASTFM_KEY" -lastfm_secret "YOUR_LASTFM_SECRET" -guild "YOUR_GUILD_ID"`
+- `.\guess-the-song-discord.exe -token "YOUR_DISCORD_TOKEN" -lastfm_key "YOUR_LASTFM_KEY" -lastfm_secret "YOUR_LASTFM_SECRET" -guild "YOUR_GUILD_ID" -db "/path/to/db/file.db"`
 
 ### Using environment variables:
 
@@ -75,6 +75,7 @@ export BOT_TOKEN="YOUR_DISCORD_TOKEN"
 export LASTFM_KEY="YOUR_LASTFM_KEY"
 export LASTFM_SECRET="YOUR_LASTFM_SECRET"
 export GUILD_ID="YOUR_GUILD_ID"
+export DB_PATH="/path/to/db/file.db"
 ./guess-the-song-discord
 ```
 
@@ -84,6 +85,7 @@ $env:BOT_TOKEN="YOUR_DISCORD_TOKEN"
 $env:LASTFM_KEY="YOUR_LASTFM_KEY"
 $env:LASTFM_SECRET="YOUR_LASTFM_SECRET"
 $env:GUILD_ID="YOUR_GUILD_ID"
+$env:DB_PATH="/path/to/db/file.db"
 .\guess-the-song-discord.exe
 ```
 

@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"guess-the-song-discord/internal"
 	"guess-the-song-discord/internal/state/tracks"
@@ -38,7 +37,6 @@ var (
 				Name:        "users",
 				Description: "Space separated list of users to take part in state",
 				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    true,
 			},
 			{
 				Name:        "tracks-per-user",
@@ -111,9 +109,8 @@ func parseGuessTheSongOptions(options []*discordgo.ApplicationCommandInteraction
 		optionMap[option.Name] = option
 	}
 
-	usersOpt, ok := optionMap[usersOptKey]
-	if !ok || usersOpt == nil || usersOpt.StringValue() == "" {
-		return nil, errors.New("no users")
+	if usersOpt, ok := optionMap[usersOptKey]; ok && usersOpt != nil {
+		out.Users = strings.Fields(usersOpt.StringValue())
 	}
 
 	if periodOpt, ok := optionMap[periodOptKey]; ok && periodOpt != nil {
@@ -127,8 +124,6 @@ func parseGuessTheSongOptions(options []*discordgo.ApplicationCommandInteraction
 	if roundsOpt, ok := optionMap[roundsOptKey]; ok && roundsOpt != nil {
 		out.Rounds = int(roundsOpt.IntValue())
 	}
-
-	out.Users = strings.Fields(usersOpt.StringValue())
 
 	return out, nil
 }
@@ -165,14 +160,39 @@ func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionC
 	}
 
 	options, err := parseGuessTheSongOptions(i.ApplicationCommandData().Options)
-
 	if err != nil {
-		if err.Error() == "no users" {
-			internal.CommandErrorResponse(s, i, "You must enter space separated Last.fm usernames to use for the state")
-		}
-
 		log.Println(err)
 		return
+	}
+
+	guild, err := s.State.Guild(i.GuildID)
+
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	var members []string
+	for _, vs := range guild.VoiceStates {
+		if vs.ChannelID == channel {
+			if vs.UserID == i.AppID {
+				continue
+			}
+			members = append(members, vs.UserID)
+		}
+	}
+
+	var users []string
+
+	if len(options.Users) > 0 {
+		users = options.Users
+	} else {
+		users, err = ctx.db.GetUsernames(members)
+		if err != nil {
+			log.Println(err)
+			internal.CommandSuccessResponse(s, i, "Error fetching last.fm usernames")
+			return
+		}
 	}
 
 	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -187,12 +207,12 @@ func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionC
 		return
 	}
 
-	var trackSlice = make([]tracks.LastfmTrack, len(options.Users)*options.TracksPerUser)
+	var trackSlice = make([]tracks.LastfmTrack, len(users)*options.TracksPerUser)
 
 	userCountString := ""
 	usersSummary := ""
-
-	for j, user := range options.Users {
+	j := 0
+	for _, user := range users {
 		userTracks, err := ctx.Lm.User.GetTopTracks(lastfm.P{
 			"user":   user,
 			"limit":  options.TracksPerUser,
@@ -214,8 +234,9 @@ func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionC
 				User:      user,
 			}
 		}
+		j += 1
 
-		userCountString = fmt.Sprintf("Fetched %d users...", j+1)
+		userCountString = fmt.Sprintf("Fetched %d users...", j)
 
 		_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Content: &userCountString,
@@ -237,6 +258,11 @@ func (ctx *Context) GuessTheSong(s *discordgo.Session, i *discordgo.InteractionC
 
 	if err != nil {
 		log.Println(fmt.Errorf("error updating interaction response: %w", err))
+		return
+	}
+
+	if len(trackSlice) == 0 {
+		internal.CommandErrorResponse(s, i, "No users found")
 		return
 	}
 
