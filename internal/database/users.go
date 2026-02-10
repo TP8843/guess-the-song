@@ -68,6 +68,7 @@ func (conn *Connection) GetUsernames(discord []string) ([]string, error) {
 
 	args := make([]interface{}, len(discord))
 	for i, id := range discord {
+		fmt.Printf("%s\n", id)
 		args[i] = id
 	}
 
@@ -79,11 +80,17 @@ func (conn *Connection) GetUsernames(discord []string) ([]string, error) {
 		return nil, fmt.Errorf("failed to get lastfm usernames, %w", err)
 	}
 
-	usernames := make([]string, len(discord))
-	index := 0
+	usernames := make([]string, 0)
 
 	for rows.Next() {
-		err = rows.Scan(&usernames[index])
+		var username string
+		err = rows.Scan(&username)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get lastfm usernames, %w", err)
+		}
+
+		fmt.Println(username)
+		usernames = append(usernames, username)
 	}
 
 	return usernames, nil
