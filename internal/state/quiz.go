@@ -20,7 +20,7 @@ type Quiz struct {
 	round       *round.Round
 	roundNumber int // roundNumber current round number of state
 
-	endGame bool // endGame whether the state should be ended
+	endGame chan bool // endGame whether the state should be ended
 
 	tracks *tracks.Tracks
 
@@ -52,7 +52,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	quiz := &Quiz{
 		tracks:      tracks.NewTracks(trackSlice),
 		points:      make(map[string]int),
-		endGame:     false,
+		endGame:     make(chan bool, 1),
 		roundNumber: 1,
 		session:     quizSession,
 		mutex:       sync.Mutex{},
@@ -63,6 +63,9 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	s.quizzes[guild] = quiz
 	quiz.mutex.Unlock()
 
+	endEarly := false
+
+outer:
 	for quiz.roundNumber <= rounds {
 		track, err := quiz.tracks.ChooseTrack()
 		if err != nil {
@@ -70,9 +73,15 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 			break
 		}
 
-		time.Sleep(3 * time.Second)
-
 		quiz.round = round.NewRound(quiz.session, track)
+
+		select {
+		case <-quiz.endGame:
+			endEarly = true
+			break outer
+		case <-time.After(3 * time.Second):
+			break
+		}
 
 		err = quiz.round.Run()
 		if err != nil {
@@ -93,11 +102,11 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 			log.Println(fmt.Errorf("could not send end of round message: %w", err))
 		}
 
-		quiz.mutex.Lock()
-		endGame := quiz.endGame
-		quiz.mutex.Unlock()
-		if endGame {
-			break
+		select {
+		case <-quiz.endGame:
+			endEarly = true
+			break outer
+		default:
 		}
 
 		quiz.roundNumber += 1
@@ -114,7 +123,7 @@ func (s *State) StartQuiz(guild, textChannel, voiceChannel string, trackSlice []
 	}
 
 	quiz.mutex.Lock()
-	if !quiz.endGame && quiz.roundNumber <= rounds {
+	if !endEarly && quiz.roundNumber <= rounds {
 		gameEndMessage.Description = "Game ended early due to missing trackSlice on Deezer"
 	}
 	quiz.mutex.Unlock()
@@ -195,7 +204,7 @@ func (q *Quiz) GenerateRoundEmbed(s *discordgo.Session) *discordgo.MessageEmbed 
 func (q *Quiz) EndGame() {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
-	q.endGame = true
+	q.endGame <- true
 	if q.round != nil {
 		q.round.EndGame()
 	}

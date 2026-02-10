@@ -29,6 +29,7 @@ func NewRound(session *session.Session, currentTrack *tracks.ResolvedTrack) *Rou
 	return &Round{
 		currentTrack: currentTrack,
 		roundPoints:  make(map[string]int),
+		mutex:        sync.Mutex{},
 
 		state:      Ready,
 		guessTotal: 0,
