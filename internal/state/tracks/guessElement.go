@@ -26,6 +26,9 @@ var (
 	reSquare = regexp.MustCompile("\\[.*]")
 	reDash   = regexp.MustCompile("-.*")
 	reFeat   = regexp.MustCompile("feat.*")
+	rePart   = regexp.MustCompile("part.*")
+	rePt     = regexp.MustCompile("pt.*")
+	reThe    = regexp.MustCompile("^the")
 	repl     = strings.NewReplacer("and", "&", ".", "", "-", "", "\"", "", "'", "")
 )
 
@@ -68,6 +71,9 @@ func normaliseString(text string) string {
 	text = reSquare.ReplaceAllString(text, "")
 	text = reDash.ReplaceAllString(text, "")
 	text = reFeat.ReplaceAllString(text, "")
+	text = rePart.ReplaceAllString(text, "")
+	text = rePt.ReplaceAllString(text, "")
+	text = reThe.ReplaceAllString(text, "")
 	text = repl.Replace(text)
 
 	text = strings.TrimSpace(text)
