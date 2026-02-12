@@ -63,7 +63,7 @@ var (
 					},
 					{
 						Name:  "week",
-						Value: "7days",
+						Value: "7day",
 					},
 					{
 						Name:  "month",
