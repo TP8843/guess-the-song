@@ -10,6 +10,7 @@ source!([
 
 config :nostrum,
   token: env!("BOT_TOKEN", :string!),
+  guild: env!("GUILD", :string!),
   gateway_intents: [
     :guilds,
     :guild_messages,
