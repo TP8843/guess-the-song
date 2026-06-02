@@ -10,6 +10,8 @@ defmodule GuessTheSong.Application do
     children = [
       # Starts a worker by calling: GuessTheSong.Worker.start_link(arg)
       # {GuessTheSong.Worker, arg}
+      # {Nostrum.Bot, bot_options}
+      GuessTheSong.Consumer
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
