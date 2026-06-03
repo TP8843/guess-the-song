@@ -11,6 +11,9 @@ defmodule GuessTheSong.Application do
       # Starts a worker by calling: GuessTheSong.Worker.start_link(arg)
       # {GuessTheSong.Worker, arg}
       # {Nostrum.Bot, bot_options}
+
+      {Registry, keys: :unique, name: GuessTheSong.QuizServerRegistry},
+      {GuessTheSong.QuizServerSupervisor, []},
       GuessTheSong.Consumer
     ]
 

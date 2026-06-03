@@ -10,9 +10,10 @@ source!([
 
 config :nostrum,
   token: env!("BOT_TOKEN", :string!),
-  guild: env!("GUILD", :string!),
+  guild: env!("GUILD", :string),
   gateway_intents: [
     :guilds,
     :guild_messages,
-    :message_content  # required to read message content
+    # required to read message content
+    :message_content
   ]
