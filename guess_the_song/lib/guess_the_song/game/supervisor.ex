@@ -1,4 +1,4 @@
-defmodule GuessTheSong.QuizServerSupervisor do
+defmodule GuessTheSong.Quiz.Supervisor do
   use DynamicSupervisor
 
   def start_link(_) do
@@ -10,23 +10,45 @@ defmodule GuessTheSong.QuizServerSupervisor do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
+  @doc """
+    Returns whether a quiz session is active for the given guild.
+  """
   def active?(guild_id) do
-    case Registry.lookup(GuessTheSong.QuizServerRegistry, guild_id) do
+    case Registry.lookup(GuessTheSong.Quiz.Registry, guild_id) do
       [] -> false
       [{_pid, _}] -> true
     end
   end
 
-  def start_session(guild_id) do
+  @doc """
+    Returns the PID of the quiz session for the given guild, if one exists.
+  """
+  def get_session(guild_id) do
+    case Registry.lookup(GuessTheSong.Quiz.Registry, guild_id) do
+      [] -> {:error, :not_found}
+      [{pid, _}] -> {:ok, pid}
+    end
+  end
+
+  @doc """
+    Starts a new quiz session for the given guild.
+  """
+  def start_session(guild_id, text_channel_id, voice_channel_id) do
     case active?(guild_id) do
-      false -> DynamicSupervisor.start_child(__MODULE__, {GuessTheSong.QuizServer, guild_id})
+      false -> DynamicSupervisor.start_child(__MODULE__, {
+        GuessTheSong.Quiz.Server,
+        {guild_id, text_channel_id, voice_channel_id}
+      })
       true -> {:error, :already_started}
     end
   end
 
+  @doc """
+    Stops the quiz session for the given guild, if one exists.
+  """
   def stop_session(guild_id) do
     case active?(guild_id) do
-      true -> GuessTheSong.QuizServer.stop(guild_id)
+      true -> GuessTheSong.Quiz.Server.stop(guild_id)
       false -> :ok
     end
   end

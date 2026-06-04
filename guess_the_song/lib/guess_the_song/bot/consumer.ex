@@ -1,30 +1,49 @@
-defmodule GuessTheSong.Consumer do
-  use Nostrum.Consumer
+defmodule GuessTheSong.Bot.Consumer do
+  @behaviour Nostrum.Consumer
 
   alias Nostrum.Api
 
   def handle_event({:READY, _data, _ws_state}) do
     IO.puts("Bot is ready! Registering commands...")
-    GuessTheSong.Commands.register_all()
+    GuessTheSong.Bot.Commands.register_all()
     IO.puts("Commands registered!")
   end
 
-  def handle_event({:INTERACTION_CREATE, %{data: %{name: "start-quiz"}} = interaction, _ws_state}) do
-    case GuessTheSong.QuizServerSupervisor.start_session(interaction.guild_id) do
-      {:ok, _pid} ->
-        response = %{
-          type: 4,
-          data: %{
-            content: "Started quiz! :D"
-          }
-        }
-        Api.Interaction.create_response(interaction, response)
+  def handle_event({:VOICE_READY, %{guild_id: guild_id}, _ws_state}) do
+    case GuessTheSong.Voice.Supervisor.get_session(guild_id) do
+      {:ok, pid} -> send(pid, :voice_ready)
+      {:error, :not_found} -> :ignore
+    end
+  end
 
-      {:error, :already_started} ->
+  def handle_event({:INTERACTION_CREATE, %{data: %{name: "start-quiz"}} = interaction, _ws_state}) do
+    text_channel_id = interaction.channel_id
+    case GuessTheSong.Voice.find_voice_channel(interaction.guild_id, interaction.member.user_id) do
+      {:ok, voice_channel_id} ->
+        case GuessTheSong.Quiz.Supervisor.start_session(interaction.guild_id, text_channel_id, voice_channel_id) do
+          {:ok, _pid} ->
+            response = %{
+              type: 4,
+              data: %{
+                content: "Started quiz! :D"
+              }
+            }
+            Api.Interaction.create_response(interaction, response)
+          {:error, :already_started} ->
+            response = %{
+              type: 4,
+              data: %{
+                content: "Quiz is already running!"
+              }
+            }
+            Api.Interaction.create_response(interaction, response)
+        end
+
+      {:error, :not_in_voice_channel} ->
         response = %{
           type: 4,
           data: %{
-            content: "Quiz is already running!"
+            content: "You are not in a voice channel!"
           }
         }
         Api.Interaction.create_response(interaction, response)
@@ -60,5 +79,5 @@ defmodule GuessTheSong.Consumer do
     end
   end
 
-  def handle_event(_event), do: :noop
+  def handle_event(_event), do: :ok
 end

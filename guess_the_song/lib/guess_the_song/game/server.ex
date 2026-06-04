@@ -1,8 +1,8 @@
-defmodule GuessTheSong.QuizServer do
+defmodule GuessTheSong.Quiz.Server do
   use GenServer, restart: :transient
 
-  def start_link(guild_id) do
-    GenServer.start_link(__MODULE__, guild_id, name: via(guild_id))
+  def start_link({guild_id, text_channel_id, voice_channel_id}) do
+    GenServer.start_link(__MODULE__, {guild_id, text_channel_id, voice_channel_id}, name: via(guild_id))
   end
 
   def get_state(guild_id), do: GenServer.call(via(guild_id), :get_state)
@@ -10,17 +10,27 @@ defmodule GuessTheSong.QuizServer do
   def stop(guild_id), do: GenServer.stop(via(guild_id))
 
   defp via(guild_id) do
-    {:via, Registry, {GuessTheSong.QuizServerRegistry, guild_id}}
+    {:via, Registry, {GuessTheSong.Quiz.Registry, guild_id}}
   end
 
   @impl true
-  def init(guild_id) do
-    IO.puts("Starting QuizServer for guild_id: #{guild_id}")
+  def init({guild_id, text_channel_id, voice_channel_id}) do
+    IO.puts("Starting QuizServer for guild_id: #{guild_id} and text_channel_id: #{text_channel_id} and voice_channel_id: #{voice_channel_id}")
 
-    server = self()
-    pid = spawn_link(fn -> GuessTheSong.Quiz.run_quiz(server) end)
-
-    {:ok, %{guild_id: guild_id, players: [], quiz_pid: pid}}
+    case GuessTheSong.Voice.Supervisor.start_session(guild_id, voice_channel_id) do
+      {:ok, _pid} ->
+        server = self()
+        pid = spawn_link(fn -> GuessTheSong.Quiz.run_quiz(server, guild_id, text_channel_id, voice_channel_id) end)
+        {:ok, %{
+          guild_id: guild_id,
+          text_channel_id: text_channel_id,
+          voice_channel_id: voice_channel_id,
+          players: [],
+          quiz_pid: pid
+        }}
+      {:error, reason} ->
+        {:stop, reason}
+    end
   end
 
   @impl true
@@ -41,5 +51,6 @@ defmodule GuessTheSong.QuizServer do
   @impl true
   def terminate(_reason, state) do
     IO.puts("Terminating GameServer for guild_id: #{state.guild_id}")
+    GuessTheSong.Voice.Supervisor.stop_session(state.guild_id)
   end
 end

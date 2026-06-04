@@ -1,8 +1,8 @@
-defmodule GuessTheSong.Commands do
+defmodule GuessTheSong.Bot.Commands do
   alias GuessTheSong.Bot.Commands.Definitions
 
   def register_all do
-    guild = Application.get_env(:nostrum, :guild)
+    guild = Application.get_env(:guess_the_song, :guild)
 
     if guild != nil and String.length(guild) > 0 do
       Enum.each(Definitions.all(), fn command ->
