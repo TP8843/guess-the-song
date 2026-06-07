@@ -4,17 +4,36 @@ defmodule GuessTheSong.Quiz do
   """
 
   alias GuessTheSong.Voice
+  alias GuessTheSong.Api
 
   @doc """
     Runs the quiz on the given server.
   """
-  def run_quiz(server, guild_id, _text_channel_id, _voice_channel_id) do
-    Voice.Server.play_audio(
-      guild_id,
-      "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
-    )
+  @spec run_quiz(pid(), String.t(), String.t(), integer()) :: :ok
+  def run_quiz(server, guild_id, text_channel_id, rounds) do
+    {:ok, count} = Api.Lastfm.get_top_track_count("tp8843", :overall)
 
-    Process.sleep(30000)
+    IO.puts("Top track count: #{count}")
+
+    count = min(100, count)
+
+    Enum.each(1..rounds, fn _ ->
+      {:ok, random_number, track} = Api.Lastfm.fetch_random_top_track("tp8843", count, :overall)
+      case GuessTheSong.Api.Deezer.find_match(track) do
+        {:ok, track} ->
+          Voice.Server.play_audio(
+            guild_id,
+            Map.get(track, "preview")
+          )
+          Process.sleep(30000)
+          Nostrum.Api.Message.create(text_channel_id, content: "Time's up! The song was: #{Map.get(track, "title")} by #{Map.get(track, "artist") |> Map.get("name")}")
+
+        {:error, error} ->
+          IO.inspect(error)
+          :ok
+      end
+    end)
+
     send(server, :stop)
   end
 end

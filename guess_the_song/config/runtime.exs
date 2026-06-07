@@ -11,6 +11,8 @@ source!([
 config :guess_the_song,
   token: env!("BOT_TOKEN", :string!),
   guild: env!("GUILD", :string),
+  lastfm_key: env!("LASTFM_KEY", :string!),
+  lastfm_secret: env!("LASTFM_SECRET", :string!),
   gateway_intents: [
     :guilds,
     :guild_messages,

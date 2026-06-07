@@ -16,11 +16,19 @@ defmodule GuessTheSong.Bot.Consumer do
     end
   end
 
-  def handle_event({:INTERACTION_CREATE, %{data: %{name: "start-quiz"}} = interaction, _ws_state}) do
+  def handle_event({:INTERACTION_CREATE, %{data: %{name: "start-quiz", options: options}} = interaction, _ws_state}) do
     text_channel_id = interaction.channel_id
+
+    options = parse_options(options)
+
     case GuessTheSong.Voice.find_voice_channel(interaction.guild_id, interaction.member.user_id) do
       {:ok, voice_channel_id} ->
-        case GuessTheSong.Quiz.Supervisor.start_session(interaction.guild_id, text_channel_id, voice_channel_id) do
+        case GuessTheSong.Quiz.Supervisor.start_session(
+               interaction.guild_id,
+               text_channel_id,
+               voice_channel_id,
+               options["rounds"]
+             ) do
           {:ok, _pid} ->
             response = %{
               type: 4,
@@ -28,14 +36,17 @@ defmodule GuessTheSong.Bot.Consumer do
                 content: "Started quiz! :D"
               }
             }
+
             Api.Interaction.create_response(interaction, response)
-          {:error, :already_started} ->
+
+          {:error, :already_active} ->
             response = %{
               type: 4,
               data: %{
                 content: "Quiz is already running!"
               }
             }
+
             Api.Interaction.create_response(interaction, response)
         end
 
@@ -46,6 +57,7 @@ defmodule GuessTheSong.Bot.Consumer do
             content: "You are not in a voice channel!"
           }
         }
+
         Api.Interaction.create_response(interaction, response)
     end
   end
@@ -80,4 +92,10 @@ defmodule GuessTheSong.Bot.Consumer do
   end
 
   def handle_event(_event), do: :ok
+
+  defp parse_options(options) do
+    Enum.reduce(options, %{}, fn option, acc ->
+      Map.put(acc, option.name, option.value)
+    end)
+  end
 end
