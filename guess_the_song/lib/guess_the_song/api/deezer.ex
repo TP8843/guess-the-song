@@ -1,6 +1,6 @@
 defmodule GuessTheSong.Api.Deezer do
   defmodule Artist do
-    defstruct [:id, :name, :url, :role]
+    defstruct [:id, :name, :url, :preview, :role]
 
     @type t :: %__MODULE__{
       id: String.t(),
@@ -20,14 +20,24 @@ defmodule GuessTheSong.Api.Deezer do
   end
 
   defmodule Track do
-    defstruct [:id, :title, :artists, :url]
+    defstruct [:id, :title, :artists, :url, :preview]
 
     @type t :: %__MODULE__{
       id: String.t(),
       title: String.t(),
       artists: [Artist.t()],
-      url: String.t()
+      url: String.t(),
+      preview: String.t()
     }
+
+    def parseJSON(json) do
+      %__MODULE__{
+        id: json["id"],
+        title: json["title"],
+        url: json["url"],
+        preview: json["preview"]
+      }
+    end
   end
 
   @doc "Finds a match for the given query using the Deezer API"
@@ -35,13 +45,16 @@ defmodule GuessTheSong.Api.Deezer do
   def find_match(lastfm_track) do
     query = "#{lastfm_track.title} #{lastfm_track.artist}"
     query = URI.encode(query)
-    case search_fuzzy(query) do
-      {:ok, response} ->
-        body = response.body |> Jason.decode!()
-        case body["data"] |> Enum.count() do
-          0 -> {:error, :not_found}
-          _ -> {:ok, body |> Map.get("data") |> List.first()}
+
+    with  {:ok, response} <- search_fuzzy(query),
+          body <- response.body,
+          {:ok, decoded} <- Jason.decode(body),
+          tracks <- decoded["data"] do
+        case tracks do
+          [head | _] -> {:ok, Track.parseJSON(head)}
+          [] -> {:error, :not_found}
         end
+    else
       {:error, error} -> {:error, error}
     end
   end

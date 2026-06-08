@@ -23,10 +23,10 @@ defmodule GuessTheSong.Quiz do
         {:ok, track} ->
           Voice.Server.play_audio(
             guild_id,
-            Map.get(track, "preview")
+            track.preview
           )
           Process.sleep(30000)
-          Nostrum.Api.Message.create(text_channel_id, content: "Time's up! The song was: #{Map.get(track, "title")} by #{Map.get(track, "artist") |> Map.get("name")}")
+          Nostrum.Api.Message.create(text_channel_id, content: "Time's up! The song was: #{track.title}")
 
         {:error, error} ->
           IO.inspect(error)
