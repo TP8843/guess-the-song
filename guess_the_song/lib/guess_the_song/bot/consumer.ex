@@ -11,12 +11,16 @@ defmodule GuessTheSong.Bot.Consumer do
 
   def handle_event({:VOICE_READY, %{guild_id: guild_id}, _ws_state}) do
     case GuessTheSong.Voice.Supervisor.get_session(guild_id) do
+      {:ok, {pid, _}} -> send(pid, :voice_ready)
       {:ok, pid} -> send(pid, :voice_ready)
       {:error, :not_found} -> :ignore
     end
   end
 
-  def handle_event({:INTERACTION_CREATE, %{data: %{name: "start-quiz", options: options}} = interaction, _ws_state}) do
+  def handle_event(
+        {:INTERACTION_CREATE, %{data: %{name: "start-quiz", options: options}} = interaction,
+         _ws_state}
+      ) do
     text_channel_id = interaction.channel_id
 
     options = parse_options(options)
@@ -85,9 +89,14 @@ defmodule GuessTheSong.Bot.Consumer do
   end
 
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
-    case msg.content do
-      "ping!" -> Api.Message.create(msg.channel_id, "pong!")
-      _ -> :ignore
+    # Check if message sent from channel used for quiz
+    case GuessTheSong.Quiz.Supervisor.get_session(msg.guild_id) do
+      {:ok, {_, %{text_channel_id: text_channel_id}}} ->
+        if msg.author.id != Nostrum.Cache.Me.get().id && msg.channel_id == text_channel_id do
+          GuessTheSong.Quiz.Server.process_message(msg.guild_id, msg)
+        end
+        :ok
+      {:error, :not_found} -> :ok
     end
   end
 

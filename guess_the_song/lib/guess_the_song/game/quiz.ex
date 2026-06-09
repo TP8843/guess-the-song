@@ -18,7 +18,7 @@ defmodule GuessTheSong.Quiz do
     count = min(100, count)
 
     Enum.each(1..rounds, fn _ ->
-      {:ok, random_number, track} = Api.Lastfm.fetch_random_top_track("tp8843", count, :overall)
+      {:ok, track} = Api.Lastfm.fetch_random_top_track("tp8843", count, :overall)
       case GuessTheSong.Api.Deezer.find_match(track) do
         {:ok, track} ->
           Voice.Server.play_audio(
@@ -33,7 +33,5 @@ defmodule GuessTheSong.Quiz do
           :ok
       end
     end)
-
-    send(server, :stop)
   end
 end

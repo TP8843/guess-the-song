@@ -26,7 +26,7 @@ defmodule GuessTheSong.Quiz.Supervisor do
   def get_session(guild_id) do
     case Registry.lookup(GuessTheSong.Quiz.Registry, guild_id) do
       [] -> {:error, :not_found}
-      [{pid, _}] -> {:ok, pid}
+      [{pid, value}] -> {:ok, {pid, value}}
     end
   end
 

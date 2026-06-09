@@ -1,20 +1,20 @@
 defmodule GuessTheSong.Api.Deezer do
   defmodule Artist do
-    defstruct [:id, :name, :url, :preview, :role]
+    defstruct [:id, :name, :url, :role]
 
     @type t :: %__MODULE__{
       id: String.t(),
       name: String.t(),
       url: String.t(),
-      role: String.t()
+      role: :main | :feat
     }
 
-    def parseJSON(json) do
+    def parseJSON(json, main_artist \\ 0) do
       %__MODULE__{
         id: json["id"],
         name: json["name"],
-        url: json["url"],
-        role: json["role"]
+        url: json["link"],
+        role: if(main_artist == json["id"], do: :main, else: :feat)
       }
     end
   end
@@ -31,12 +31,18 @@ defmodule GuessTheSong.Api.Deezer do
     }
 
     def parseJSON(json) do
-      %__MODULE__{
+      IO.inspect(json["id"])
+
+      track = %__MODULE__{
         id: json["id"],
         title: json["title"],
-        url: json["url"],
+        url: json["link"],
         preview: json["preview"]
       }
+
+      # Parse the full list of artists from json
+      artists = json["contributors"] |> Enum.map(fn artist -> Artist.parseJSON(artist, json["artist"]["id"]) end)
+      %{track | artists: artists}
     end
   end
 
@@ -49,13 +55,17 @@ defmodule GuessTheSong.Api.Deezer do
     with  {:ok, response} <- search_fuzzy(query),
           body <- response.body,
           {:ok, decoded} <- Jason.decode(body),
-          tracks <- decoded["data"] do
-        case tracks do
-          [head | _] -> {:ok, Track.parseJSON(head)}
-          [] -> {:error, :not_found}
-        end
+          tracks <- decoded["data"],
+          [head | _] <- tracks,
+          {:ok, response} <- fetch_track(head["id"]),
+          body <- response.body,
+          {:ok, decoded} <- Jason.decode(body),
+          track <- Track.parseJSON(decoded)
+    do
+      {:ok, track}
     else
       {:error, error} -> {:error, error}
+      [] -> {:error, :not_found}
     end
   end
 
@@ -72,6 +82,12 @@ defmodule GuessTheSong.Api.Deezer do
     artist = URI.encode(artist)
     search = URI.encode("artist:\"#{artist}\",title:\"#{title}\"")
     url = "https://api.deezer.com/search?q=#{search}&limit=#{limit}"
+    HTTPoison.get(url)
+  end
+
+  @spec fetch_track(String.t()) :: HTTPoison.Response.t()
+  defp fetch_track(id) do
+    url = "https://api.deezer.com/track/#{id}"
     HTTPoison.get(url)
   end
 end

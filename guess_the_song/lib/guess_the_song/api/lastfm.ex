@@ -67,7 +67,7 @@ defmodule GuessTheSong.Api.Lastfm do
           Map.get("track", []) |>
           Enum.map(fn track -> Track.parseJSON(track) end) |>
           List.first()
-        {:ok, random_number, track}
+        {:ok, track}
 
       {:error, reason} ->
         IO.inspect(reason)
