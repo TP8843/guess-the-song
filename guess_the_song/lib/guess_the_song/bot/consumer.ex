@@ -17,6 +17,19 @@ defmodule GuessTheSong.Bot.Consumer do
     end
   end
 
+  def handle_event({:VOICE_SPEAKING_UPDATE, %{speaking: false, guild_id: guild_id}, _ws_state}) do
+    # Audio has finished playing!
+    case GuessTheSong.Quiz.Supervisor.active?(guild_id) do
+      true -> GuessTheSong.Quiz.Server.end_round(guild_id)
+      false -> :ok
+    end
+  end
+
+  def handle_event({:VOICE_SPEAKING_UPDATE, %{speaking: true, guild_id: _guild_id}, _ws_state}) do
+    # Audio started playing
+    :ok
+  end
+
   def handle_event(
         {:INTERACTION_CREATE, %{data: %{name: "start-quiz", options: options}} = interaction,
          _ws_state}
@@ -64,6 +77,19 @@ defmodule GuessTheSong.Bot.Consumer do
 
         Api.Interaction.create_response(interaction, response)
     end
+  end
+
+  def handle_event({:INTERACTION_CREATE, %{data: %{name: "end-quiz"}} = interaction, _ws_state}) do
+    response = %{
+      type: 4,
+      data: %{
+        content: "Ending quiz..."
+      }
+    }
+
+    Api.Interaction.create_response(interaction, response)
+
+    GuessTheSong.Quiz.Supervisor.stop_session(interaction.guild_id)
   end
 
   def handle_event({:INTERACTION_CREATE, %{data: %{name: "test"}} = interaction, _ws_state}) do

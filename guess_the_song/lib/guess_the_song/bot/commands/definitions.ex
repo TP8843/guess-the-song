@@ -30,6 +30,10 @@ defmodule GuessTheSong.Bot.Commands.Definitions do
             required: true
           }
         ]
+      },
+      %{
+        name: "end-quiz",
+        description: "ends the current quiz",
       }
     ]
   end

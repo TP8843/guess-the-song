@@ -3,7 +3,7 @@ defmodule GuessTheSong.Quiz do
     Runs a music guessing quiz on the given server.
   """
 
-  alias GuessTheSong.Voice
+  alias GuessTheSong.Quiz.Server
   alias GuessTheSong.Api
 
   @doc """
@@ -17,16 +17,25 @@ defmodule GuessTheSong.Quiz do
 
     count = min(100, count)
 
+    Server.add_source(guild_id, 315179109661671425, "tp8843", count)
+
     Enum.each(1..rounds, fn _ ->
-      {:ok, track} = Api.Lastfm.fetch_random_top_track("tp8843", count, :overall)
+      {discord_id, lastfm_id, index} = Server.get_random_track(guild_id)
+      {:ok, track} = Api.Lastfm.fetch_top_track_from_index(lastfm_id, :overall, index)
       case GuessTheSong.Api.Deezer.find_match(track) do
         {:ok, track} ->
-          Voice.Server.play_audio(
+          GuessTheSong.Voice.Server.play_audio(
             guild_id,
             track.preview
           )
-          Process.sleep(30000)
-          Nostrum.Api.Message.create(text_channel_id, content: "Time's up! The song was: #{track.title}")
+
+          Server.start_round(guild_id, track)
+
+          receive do
+            {:round_ended} -> :ok
+          end
+
+          GuessTheSong.Voice.Server.stop_audio(guild_id)
 
         {:error, error} ->
           IO.inspect(error)

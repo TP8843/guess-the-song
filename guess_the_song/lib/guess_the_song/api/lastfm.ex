@@ -34,44 +34,44 @@ defmodule GuessTheSong.Api.Lastfm do
     period = timeframe(period) |> URI.encode()
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
     url = "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=#{limit}&period=#{period}&api_key=#{token}&format=json"
-    IO.puts(url)
-    case HTTPoison.get(url) do
-      {:ok, response} ->
-        tracks = Map.get(response, :body) |>
-          Jason.decode!() |>
-          Map.get("toptracks", []) |>
-          Map.get("track", []) |>
-          Enum.map(fn track -> Track.parseJSON(track) end)
-        {:ok, tracks}
 
-      {:error, reason} ->
-        IO.inspect(reason)
-        {:error, reason}
+    with {:ok, response} <- HTTPoison.get(url),
+         {:ok, body} <- Jason.decode(response.body),
+         %{"toptracks" => toptracks} <- body,
+         %{"track" => track} <- toptracks,
+         tracks <- Enum.map(track, fn t -> Track.parseJSON(t) end) do
+      {:ok, tracks}
+    else
+      {:error, reason} -> {:error, reason}
+      %{} -> {:error, :invalid_response}
     end
   end
 
-  @doc "Fetches the top tracks for a given user, limit, and period"
+  @doc "Fetches a random top track for a given user, limit, and period"
   @spec fetch_random_top_track(String.t(), integer(), :week | :month | :quarter_year | :half_year | :year | :overall) :: {:ok, Track.t()} | {:error, any()}
   def fetch_random_top_track(user, limit, period) do
+    random_number = :rand.uniform(limit)
+    fetch_top_track_from_index(user, period, random_number)
+  end
+
+  @doc "Fetches top track for a given user, period, and index"
+  @spec fetch_top_track_from_index(String.t(), :week | :month | :quarter_year | :half_year | :year | :overall, integer()) :: {:ok, Track.t()} | {:error, any()}
+  def fetch_top_track_from_index(user, period, index) do
     user = URI.encode(user)
     period = timeframe(period) |> URI.encode()
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
-    random_number = :rand.uniform(limit)
-    url = "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&page=#{random_number}&period=#{period}&api_key=#{token}&format=json"
-    IO.puts(url)
-    case HTTPoison.get(url) do
-      {:ok, response} ->
-        track = Map.get(response, :body) |>
-          Jason.decode!() |>
-          Map.get("toptracks", []) |>
-          Map.get("track", []) |>
-          Enum.map(fn track -> Track.parseJSON(track) end) |>
-          List.first()
-        {:ok, track}
+    url = "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&page=#{index}&period=#{period}&api_key=#{token}&format=json"
 
-      {:error, reason} ->
-        IO.inspect(reason)
-        {:error, reason}
+    with {:ok, response} <- HTTPoison.get(url),
+         {:ok, body} <- Jason.decode(response.body),
+         %{"toptracks" => toptracks} <- body,
+         %{"track" => track} <- toptracks,
+         tracks <- Enum.map(track, fn t -> Track.parseJSON(t) end),
+         [track | _] <- tracks do
+      {:ok, track}
+    else
+      {:error, reason} -> {:error, reason}
+      %{} -> {:error, :invalid_response}
     end
   end
 
@@ -81,19 +81,14 @@ defmodule GuessTheSong.Api.Lastfm do
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
     url = "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&period=#{period}&api_key=#{token}&format=json"
 
-    case HTTPoison.get(url) do
-      {:ok, response} ->
-        IO.inspect(response.body)
-        count = Map.get(response, :body) |>
-          Jason.decode!() |>
-          Map.get("toptracks", %{}) |>
-          Map.get("@attr", %{}) |>
-          Map.get("total", 0)
-        {:ok, count}
-
-      {:error, reason} ->
-        IO.inspect(reason)
-        {:error, reason}
+    with {:ok, response} <- HTTPoison.get(url),
+         %{body: body} <- response,
+         {:ok, decoded} <- Jason.decode(body),
+         %{"toptracks" => %{"@attr" => %{"total" => total}}} <- decoded do
+        {:ok, total}
+    else
+      {:error, reason} -> {:error, reason}
+      %{} -> {:error, :invalid_response}
     end
   end
 

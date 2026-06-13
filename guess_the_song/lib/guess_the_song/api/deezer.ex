@@ -31,8 +31,6 @@ defmodule GuessTheSong.Api.Deezer do
     }
 
     def parseJSON(json) do
-      IO.inspect(json["id"])
-
       track = %__MODULE__{
         id: json["id"],
         title: json["title"],
@@ -53,12 +51,12 @@ defmodule GuessTheSong.Api.Deezer do
     query = URI.encode(query)
 
     with  {:ok, response} <- search_fuzzy(query),
-          body <- response.body,
+          %{body: body} <- response,
           {:ok, decoded} <- Jason.decode(body),
-          tracks <- decoded["data"],
+          %{"data" => tracks} <- decoded,
           [head | _] <- tracks,
           {:ok, response} <- fetch_track(head["id"]),
-          body <- response.body,
+          %{body: body} <- response,
           {:ok, decoded} <- Jason.decode(body),
           track <- Track.parseJSON(decoded)
     do
@@ -66,6 +64,7 @@ defmodule GuessTheSong.Api.Deezer do
     else
       {:error, error} -> {:error, error}
       [] -> {:error, :not_found}
+      %{} -> {:error, :invalid_response}
     end
   end
 
