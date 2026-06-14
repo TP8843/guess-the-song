@@ -148,9 +148,7 @@ defmodule GuessTheSong.Quiz.Server do
   def handle_cast({:process_message, msg}, state) do
     alias GuessTheSong.Quiz.Track.GuessElement
 
-    new_state = state
-
-    new_state = Enum.reduce(state.round.track.guess_elements, new_state, fn guess_element, acc ->
+    new_state = Enum.reduce(state.round.track.guess_elements, state, fn guess_element, acc ->
       if not guess_element.guessed and GuessElement.match?(guess_element, msg.content) do
         Nostrum.Api.Message.create(state.info.text_channel_id,
           content: "Correct! #{guess_element.type} is: #{guess_element.string}",
@@ -167,11 +165,16 @@ defmodule GuessTheSong.Quiz.Server do
           end)}
         end)
         acc = update_in(acc, [:scores], &Map.update(&1, msg.author.id, guess_element.value, fn value -> value + guess_element.value end))
+        acc = update_in(acc, [:round, :track], fn track -> %{track | correct_guesses: track.correct_guesses + 1} end)
         acc
       else
         acc
       end
     end)
+
+    if new_state.round.track.correct_guesses == length(new_state.round.track.guess_elements) do
+      GuessTheSong.Quiz.Server.end_round(new_state.info.guild_id)
+    end
 
     IO.inspect(new_state.scores)
     {:noreply, new_state}
