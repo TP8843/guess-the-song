@@ -3,6 +3,7 @@ defmodule GuessTheSong.Quiz do
     Runs a music guessing quiz on the given server.
   """
 
+  alias GuessTheSong.Quiz
   alias GuessTheSong.Quiz.Server
   alias GuessTheSong.Api
 
@@ -21,12 +22,15 @@ defmodule GuessTheSong.Quiz do
 
     Enum.each(1..rounds, fn _ ->
       {discord_id, lastfm_id, index} = Server.get_random_track(guild_id)
-      {:ok, track} = Api.Lastfm.fetch_top_track_from_index(lastfm_id, :overall, index)
-      case GuessTheSong.Api.Deezer.find_match(track) do
-        {:ok, track} ->
+      {:ok, lastfm} = Api.Lastfm.fetch_top_track_from_index(lastfm_id, :overall, index)
+      case GuessTheSong.Api.Deezer.find_match(lastfm) do
+        {:ok, deezer} ->
+          track = Quiz.Track.create(discord_id, lastfm, deezer)
           GuessTheSong.Voice.Server.play_audio(
             guild_id,
-            track.preview
+            track.deezer.preview,
+            :url,
+            volume: 0.5
           )
 
           Server.start_round(guild_id, track)
