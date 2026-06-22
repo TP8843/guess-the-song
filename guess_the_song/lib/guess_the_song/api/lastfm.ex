@@ -27,6 +27,46 @@ defmodule GuessTheSong.Api.Lastfm do
     end
   end
 
+  defmodule User do
+    defstruct [
+      :name,
+      :url,
+      :image
+    ]
+
+    @type t :: %__MODULE__{
+      name: String.t(),
+      url: String.t(),
+      image: String.t()
+    }
+
+    def parseJSON(user) do
+      %User{
+        name: Map.get(user, "name"),
+        url: Map.get(user, "url"),
+        image: Enum.at(Map.get(user, "image"), 3) |> Map.get("#text")
+      }
+    end
+  end
+
+  def fetch_user(user) do
+    user = URI.encode(user)
+    token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
+    url = "https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=#{user}&api_key=#{token}&format=json"
+
+    with {:ok, %{status_code: 200, body: body}} <- HTTPoison.get(url),
+         {:ok, body} <- Jason.decode(body),
+         %{"user" => user} <- body,
+         user <- User.parseJSON(user) do
+      {:ok, user}
+    else
+      # Handle user not found
+      {:ok, %{status_code: 404}} -> {:error, :not_found}
+      # Handle other errors
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @doc "Fetches the top tracks for a given user, limit, and period"
   @spec fetch_top_tracks(String.t(), integer(), :week | :month | :quarter_year | :half_year | :year | :overall) :: {:ok, [Track.t()]} | {:error, any()}
   def fetch_top_tracks(user, limit, period) do

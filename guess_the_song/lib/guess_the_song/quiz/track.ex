@@ -60,7 +60,7 @@ defmodule GuessTheSong.Quiz.Track do
 
   alias GuessTheSong.Api
 
-  @spec create(Integer.t(), Api.Lastfm.Track.t(), Api.Deezer.Track.t()) :: t
+  @spec create(Api.Lastfm.User.t(), Api.Lastfm.Track.t(), Api.Deezer.Track.t()) :: t
   def create(source, lastfm, deezer) do
     guess_elements = [GuessElement.create(deezer.title, "Title", 2)] ++
       Enum.map(deezer.artists, fn c ->

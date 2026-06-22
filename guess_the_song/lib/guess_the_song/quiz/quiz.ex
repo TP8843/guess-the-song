@@ -8,24 +8,45 @@ defmodule GuessTheSong.Quiz do
   alias GuessTheSong.Api
 
   @doc """
-    Runs the quiz on the given server.
+    Adds a source to the quiz for the given guild.
   """
-  @spec run_quiz(pid(), String.t(), String.t(), integer()) :: :ok
-  def run_quiz(server, guild_id, text_channel_id, rounds) do
-    {:ok, count} = Api.Lastfm.get_top_track_count("tp8843", :overall)
+  @spec add_source(String.t(), integer(), String.t(), integer()) :: :ok
+  def add_source(guild_id, discord_id, lastfm_id, max \\ 100) do
+    {:ok, lastfm} = Api.Lastfm.fetch_user(lastfm_id)
+
+    {:ok, count} = Api.Lastfm.get_top_track_count(lastfm_id, :overall)
 
     IO.puts("Top track count: #{count}")
+    count = min(max, count)
 
-    count = min(100, count)
+    Server.add_source(guild_id, discord_id, lastfm, count)
+  end
 
-    Server.add_source(guild_id, 315179109661671425, "tp8843", count)
+  def run_round(guild_id) do
+    {discord_id, lastfm, index} = Server.get_random_track(guild_id)
+    {:ok, lastfm_track} = Api.Lastfm.fetch_top_track_from_index(lastfm.name, :overall, index)
+    case GuessTheSong.Api.Deezer.find_match(lastfm_track) do
+      {:ok, deezer} ->
+        track = Quiz.Track.create(lastfm, lastfm_track, deezer)
+        {:ok, track}
+      {:error, :not_found} ->
+        run_round(guild_id)
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+    Runs the quiz on the given server.
+  """
+  @spec run_quiz(String.t(), String.t(), integer()) :: :ok
+  def run_quiz(guild_id, text_channel_id, rounds) do
+    add_source(guild_id, 315179109661671425, "tp8843", 150)
 
     Enum.each(1..rounds, fn _ ->
-      {discord_id, lastfm_id, index} = Server.get_random_track(guild_id)
-      {:ok, lastfm} = Api.Lastfm.fetch_top_track_from_index(lastfm_id, :overall, index)
-      case GuessTheSong.Api.Deezer.find_match(lastfm) do
-        {:ok, deezer} ->
-          track = Quiz.Track.create(discord_id, lastfm, deezer)
+      case run_round(guild_id) do
+        {:ok, track} ->
+          :timer.sleep(1000)
           GuessTheSong.Voice.Server.play_audio(
             guild_id,
             track.deezer.preview,

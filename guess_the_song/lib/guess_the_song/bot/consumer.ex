@@ -80,6 +80,30 @@ defmodule GuessTheSong.Bot.Consumer do
   end
 
   def handle_event({:INTERACTION_CREATE, %{data: %{name: "end-quiz"}} = interaction, _ws_state}) do
+    if GuessTheSong.Quiz.Supervisor.active?(interaction.guild_id) do
+      response = %{
+        type: 4,
+        data: %{
+          content: "Ending quiz..."
+        }
+      }
+
+      Api.Interaction.create_response(interaction, response)
+
+      GuessTheSong.Quiz.Supervisor.stop_session(interaction.guild_id)
+    else
+      response = %{
+        type: 4,
+        data: %{
+          content: "No quiz is currently running!"
+        }
+      }
+
+      Api.Interaction.create_response(interaction, response)
+    end
+  end
+
+  def handle_event({:INTERACTION_CREATE, %{data: %{name: "test"}} = interaction, _ws_state}) do
     response = %{
       type: 4,
       data: %{
@@ -121,8 +145,11 @@ defmodule GuessTheSong.Bot.Consumer do
         if msg.author.id != Nostrum.Cache.Me.get().id && msg.channel_id == text_channel_id do
           GuessTheSong.Quiz.Server.process_message(msg.guild_id, msg)
         end
+
         :ok
-      {:error, :not_found} -> :ok
+
+      {:error, :not_found} ->
+        :ok
     end
   end
 

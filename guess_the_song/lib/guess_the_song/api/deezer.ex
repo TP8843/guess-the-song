@@ -20,14 +20,15 @@ defmodule GuessTheSong.Api.Deezer do
   end
 
   defmodule Track do
-    defstruct [:id, :title, :artists, :url, :preview]
+    defstruct [:id, :title, :artists, :url, :preview, :cover]
 
     @type t :: %__MODULE__{
       id: String.t(),
       title: String.t(),
       artists: [Artist.t()],
       url: String.t(),
-      preview: String.t()
+      preview: String.t(),
+      cover: String.t()
     }
 
     def parseJSON(json) do
@@ -35,7 +36,8 @@ defmodule GuessTheSong.Api.Deezer do
         id: json["id"],
         title: json["title"],
         url: json["link"],
-        preview: json["preview"]
+        preview: json["preview"],
+        cover: json["album"]["cover"]
       }
 
       # Parse the full list of artists from json

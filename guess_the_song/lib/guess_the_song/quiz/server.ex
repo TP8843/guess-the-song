@@ -25,7 +25,7 @@ defmodule GuessTheSong.Quiz.Server do
   @spec add_source(
           guild_id :: integer,
           discord_id :: integer,
-          lastfm_id :: String.t(),
+          lastfm :: Api.Lastfm.User.t(),
           count :: integer
         ) :: :ok
   def add_source(guild_id, discord_id, lastfm_id, count),
@@ -55,14 +55,13 @@ defmodule GuessTheSong.Quiz.Server do
 
     case GuessTheSong.Voice.Supervisor.start_session(guild_id, voice_channel_id) do
       {:ok, _pid} ->
-        server = self()
 
         # Ensure that if the quiz process exits, the server is stopped
         Process.flag(:trap_exit, true)
 
         pid =
           spawn_link(fn ->
-            GuessTheSong.Quiz.run_quiz(server, guild_id, text_channel_id, rounds)
+            GuessTheSong.Quiz.run_quiz(guild_id, text_channel_id, rounds)
           end)
 
         {:ok,
@@ -104,15 +103,15 @@ defmodule GuessTheSong.Quiz.Server do
     track = Enum.random(source.choices)
 
     new_state = update_in(state, [:sources, discord_id, :choices], &(&1 |> MapSet.delete(track)))
-    {:reply, {discord_id, source.lastfm_id, track}, new_state}
+    {:reply, {discord_id, source.lastfm, track}, new_state}
   end
 
   @impl true
-  def handle_cast({:add_source, {discord_id, lastfm_id, count}}, state) do
+  def handle_cast({:add_source, {discord_id, lastfm, count}}, state) do
     {:noreply,
      update_in(
        state.sources,
-       &Map.put(&1, discord_id, %{lastfm_id: lastfm_id, choices: MapSet.new(1..count)})
+       &Map.put(&1, discord_id, %{lastfm: lastfm, choices: MapSet.new(1..count)})
      )}
   end
 
@@ -134,7 +133,8 @@ defmodule GuessTheSong.Quiz.Server do
   def handle_cast({:end_round}, state) do
     if state.round.running do
       Nostrum.Api.Message.create(state.info.text_channel_id,
-        content: "Time's up! The song was: #{state.round.track.deezer.title}, by #{state.round.track.deezer.artists |> Enum.reduce("", fn contributor, acc -> acc <> contributor.name <> ", " end) |> String.trim_trailing()}"
+        content: "Round End",
+        embed: GuessTheSong.Quiz.Embeds.round_end(state.round.track, state.scores)
       )
 
       send(state.info.quiz_pid, {:round_ended})
@@ -148,35 +148,53 @@ defmodule GuessTheSong.Quiz.Server do
   def handle_cast({:process_message, msg}, state) do
     alias GuessTheSong.Quiz.Track.GuessElement
 
-    new_state = Enum.reduce(state.round.track.guess_elements, state, fn guess_element, acc ->
-      if not guess_element.guessed and GuessElement.match?(guess_element, msg.content) do
-        Nostrum.Api.Message.create(state.info.text_channel_id,
-          content: "Correct! #{guess_element.type} is: #{guess_element.string}",
-          message_reference: %{message_id: msg.id}
-        )
+    new_state =
+      Enum.reduce(state.round.track.guess_elements, state, fn guess_element, acc ->
+        if not guess_element.guessed and GuessElement.match?(guess_element, msg.content) do
+          Nostrum.Api.Message.create(state.info.text_channel_id,
+            embed: GuessTheSong.Quiz.Embeds.correct_guess(guess_element),
+            message_reference: %{message_id: msg.id}
+          )
 
-        acc = update_in(acc, [:round, :track], fn track ->
-          %{track | guess_elements: Enum.map(track.guess_elements, fn element ->
-            if element == guess_element do
-              %{element | guessed: true}
-            else
-              element
-            end
-          end)}
-        end)
-        acc = update_in(acc, [:scores], &Map.update(&1, msg.author.id, guess_element.value, fn value -> value + guess_element.value end))
-        acc = update_in(acc, [:round, :track], fn track -> %{track | correct_guesses: track.correct_guesses + 1} end)
-        acc
-      else
-        acc
-      end
-    end)
+          acc =
+            update_in(acc, [:round, :track], fn track ->
+              %{
+                track
+                | guess_elements:
+                    Enum.map(track.guess_elements, fn element ->
+                      if element == guess_element do
+                        %{element | guessed: true, guessed_by: msg.author.id}
+                      else
+                        element
+                      end
+                    end)
+              }
+            end)
+
+          acc =
+            update_in(
+              acc,
+              [:scores],
+              &Map.update(&1, msg.author.id, guess_element.value, fn value ->
+                value + guess_element.value
+              end)
+            )
+
+          acc =
+            update_in(acc, [:round, :track], fn track ->
+              %{track | correct_guesses: track.correct_guesses + 1}
+            end)
+
+          acc
+        else
+          acc
+        end
+      end)
 
     if new_state.round.track.correct_guesses == length(new_state.round.track.guess_elements) do
       GuessTheSong.Quiz.Server.end_round(new_state.info.guild_id)
     end
 
-    IO.inspect(new_state.scores)
     {:noreply, new_state}
   end
 
@@ -200,13 +218,9 @@ defmodule GuessTheSong.Quiz.Server do
   @impl true
   def terminate(_reason, state) do
     IO.puts("Terminating GameServer for guild_id: #{state.info.guild_id}")
-    IO.inspect(state.scores)
 
     Nostrum.Api.Message.create(state.info.text_channel_id,
-      content: "Quiz ended! #{Enum.reduce(state.scores, "", fn {user_id, score}, acc ->
-        {:ok, user} = Nostrum.Cache.MemberCache.get(state.info.guild_id, user_id)
-        acc <> "#{user.nick}: #{score}\n"
-      end)}"
+      embed: GuessTheSong.Quiz.Embeds.game_end(state.scores)
     )
 
     GuessTheSong.Voice.Supervisor.stop_session(state.info.guild_id)
