@@ -23,3 +23,7 @@ erl_crash.dump
 guess_the_song-*.tar
 
 *.env
+
+*.db
+*.db-shm
+*.db-wal

@@ -24,7 +24,8 @@ defmodule GuessTheSong.Application do
       {Registry, keys: :unique, name: GuessTheSong.Voice.Registry},
       {GuessTheSong.Voice.Supervisor, []},
       # GuessTheSong.Bot.Consumer
-      {Nostrum.Bot, bot_options}
+      {Nostrum.Bot, bot_options},
+      {GuessTheSong.DB.Repo, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

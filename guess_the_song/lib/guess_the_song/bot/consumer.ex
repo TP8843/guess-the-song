@@ -31,6 +31,92 @@ defmodule GuessTheSong.Bot.Consumer do
   end
 
   def handle_event(
+        {:INTERACTION_CREATE, %{data: %{name: "link", options: options}} = interaction, _ws_state}
+      ) do
+    options = parse_options(options)
+
+    response = %{
+      type: 4,
+      data: %{
+        content: "Linking Last.fm account..."
+      }
+    }
+
+    Api.Interaction.create_response(interaction, response)
+
+    Task.async(fn ->
+      case GuessTheSong.Api.Lastfm.fetch_user(options["lastfm"]) do
+        {:ok, user} ->
+          case GuessTheSong.DB.User
+               |> GuessTheSong.DB.Repo.get_by(discord_id: interaction.user.id) do
+            nil ->
+              db_user = %GuessTheSong.DB.User{
+                discord_id: interaction.user.id,
+                lastfm_username: user.name
+              }
+
+              GuessTheSong.DB.Repo.insert!(db_user)
+
+            db_user ->
+              changeset = GuessTheSong.DB.User.changeset(db_user, %{lastfm_username: user.name})
+              GuessTheSong.DB.Repo.update(changeset)
+          end
+
+          Api.Interaction.edit_response(interaction, %{
+            content: "",
+            embed: GuessTheSong.Quiz.Embeds.link_account_success(user)
+          })
+
+        {:error, :not_found} ->
+          Api.Interaction.edit_response(interaction, %{
+            content: "",
+            embed: GuessTheSong.Quiz.Embeds.link_account_failure()
+          })
+
+        {:error, reason} ->
+          IO.inspect(reason)
+
+          Api.Interaction.edit_response(interaction, %{
+            content: "",
+            embed: GuessTheSong.Quiz.Embeds.error("Failed to link Last.fm account.")
+          })
+      end
+    end)
+
+    :ok
+  end
+
+  def handle_event({:INTERACTION_CREATE, %{data: %{name: "unlink"}} = interaction, _ws_state}) do
+    alias GuessTheSong.DB
+
+    response = %{
+      type: 4,
+      data: %{
+        content: "Unlinking Last.fm account..."
+      }
+    }
+
+    Api.Interaction.create_response(interaction, response)
+
+    case DB.User
+         |> DB.Repo.get_by(discord_id: interaction.member.user_id) do
+      nil ->
+        Api.Interaction.edit_response(interaction, %{
+          content: "",
+          embed: GuessTheSong.Quiz.Embeds.unlink_account_failure()
+        })
+
+      user ->
+        DB.Repo.delete(user)
+
+        Api.Interaction.edit_response(interaction, %{
+          content: "",
+          embed: GuessTheSong.Quiz.Embeds.unlink_account_success(user.lastfm_username)
+        })
+    end
+  end
+
+  def handle_event(
         {:INTERACTION_CREATE, %{data: %{name: "start-quiz", options: options}} = interaction,
          _ws_state}
       ) do
@@ -101,41 +187,6 @@ defmodule GuessTheSong.Bot.Consumer do
 
       Api.Interaction.create_response(interaction, response)
     end
-  end
-
-  def handle_event({:INTERACTION_CREATE, %{data: %{name: "test"}} = interaction, _ws_state}) do
-    response = %{
-      type: 4,
-      data: %{
-        content: "Ending quiz..."
-      }
-    }
-
-    Api.Interaction.create_response(interaction, response)
-
-    GuessTheSong.Quiz.Supervisor.stop_session(interaction.guild_id)
-  end
-
-  def handle_event({:INTERACTION_CREATE, %{data: %{name: "test"}} = interaction, _ws_state}) do
-    response = %{
-      type: 4,
-      data: %{
-        content: "Hello, World!"
-      }
-    }
-
-    Api.Interaction.create_response(interaction, response)
-  end
-
-  def handle_event({:INTERACTION_CREATE, %{data: %{name: "echo"}} = interaction, _ws_state}) do
-    response = %{
-      type: 4,
-      data: %{
-        content: Enum.at(interaction.data.options, 0).value
-      }
-    }
-
-    Api.Interaction.create_response(interaction, response)
   end
 
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do

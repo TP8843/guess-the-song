@@ -2,20 +2,21 @@ defmodule GuessTheSong.Bot.Commands.Definitions do
   def all do
     [
       %{
-        name: "test",
-        description: "test command"
-      },
-      %{
-        name: "echo",
-        description: "echo response back",
+        name: "link",
+        description: "link your last.fm account to your Discord account",
         options: [
           %{
-            name: "message",
-            description: "message to echo",
+            name: "lastfm",
+            description: "your last.fm username",
             type: 3,
             required: true
           }
         ]
+      },
+      %{
+        name: "unlink",
+        description: "unlink your last.fm account from your Discord account",
+        options: []
       },
       %{
         name: "start-quiz",
@@ -33,7 +34,7 @@ defmodule GuessTheSong.Bot.Commands.Definitions do
       },
       %{
         name: "end-quiz",
-        description: "ends the current quiz",
+        description: "ends the current quiz"
       }
     ]
   end

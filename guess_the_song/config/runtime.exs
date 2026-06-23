@@ -1,8 +1,6 @@
 import Config
 import Dotenvy
 
-IO.puts(Path.absname(".env", File.cwd!()))
-
 source!([
   Path.absname(".env", File.cwd!()),
   System.get_env()
@@ -20,3 +18,9 @@ config :guess_the_song,
     # required to read message content
     :message_content
   ]
+
+config :guess_the_song, GuessTheSong.DB.Repo, database: env!("DATABASE", :string!)
+
+config :nostrum,
+  youtubedl: false,
+  streamlink: false

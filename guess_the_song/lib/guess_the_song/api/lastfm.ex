@@ -9,12 +9,12 @@ defmodule GuessTheSong.Api.Lastfm do
     ]
 
     @type t :: %__MODULE__{
-      id: String.t(),
-      title: String.t(),
-      artist: String.t(),
-      image_url: String.t(),
-      url: String.t()
-    }
+            id: String.t(),
+            title: String.t(),
+            artist: String.t(),
+            image_url: String.t(),
+            url: String.t()
+          }
 
     def parseJSON(track) do
       %Track{
@@ -31,19 +31,22 @@ defmodule GuessTheSong.Api.Lastfm do
     defstruct [
       :name,
       :url,
+      :playcount,
       :image
     ]
 
     @type t :: %__MODULE__{
-      name: String.t(),
-      url: String.t(),
-      image: String.t()
-    }
+            name: String.t(),
+            url: String.t(),
+            playcount: String.t(),
+            image: String.t()
+          }
 
     def parseJSON(user) do
       %User{
         name: Map.get(user, "name"),
         url: Map.get(user, "url"),
+        playcount: Map.get(user, "playcount"),
         image: Enum.at(Map.get(user, "image"), 3) |> Map.get("#text")
       }
     end
@@ -52,7 +55,9 @@ defmodule GuessTheSong.Api.Lastfm do
   def fetch_user(user) do
     user = URI.encode(user)
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
-    url = "https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=#{user}&api_key=#{token}&format=json"
+
+    url =
+      "https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=#{user}&api_key=#{token}&format=json"
 
     with {:ok, %{status_code: 200, body: body}} <- HTTPoison.get(url),
          {:ok, body} <- Jason.decode(body),
@@ -68,12 +73,18 @@ defmodule GuessTheSong.Api.Lastfm do
   end
 
   @doc "Fetches the top tracks for a given user, limit, and period"
-  @spec fetch_top_tracks(String.t(), integer(), :week | :month | :quarter_year | :half_year | :year | :overall) :: {:ok, [Track.t()]} | {:error, any()}
+  @spec fetch_top_tracks(
+          String.t(),
+          integer(),
+          :week | :month | :quarter_year | :half_year | :year | :overall
+        ) :: {:ok, [Track.t()]} | {:error, any()}
   def fetch_top_tracks(user, limit, period) do
     user = URI.encode(user)
     period = timeframe(period) |> URI.encode()
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
-    url = "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=#{limit}&period=#{period}&api_key=#{token}&format=json"
+
+    url =
+      "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=#{limit}&period=#{period}&api_key=#{token}&format=json"
 
     with {:ok, response} <- HTTPoison.get(url),
          {:ok, body} <- Jason.decode(response.body),
@@ -88,19 +99,29 @@ defmodule GuessTheSong.Api.Lastfm do
   end
 
   @doc "Fetches a random top track for a given user, limit, and period"
-  @spec fetch_random_top_track(String.t(), integer(), :week | :month | :quarter_year | :half_year | :year | :overall) :: {:ok, Track.t()} | {:error, any()}
+  @spec fetch_random_top_track(
+          String.t(),
+          integer(),
+          :week | :month | :quarter_year | :half_year | :year | :overall
+        ) :: {:ok, Track.t()} | {:error, any()}
   def fetch_random_top_track(user, limit, period) do
     random_number = :rand.uniform(limit)
     fetch_top_track_from_index(user, period, random_number)
   end
 
   @doc "Fetches top track for a given user, period, and index"
-  @spec fetch_top_track_from_index(String.t(), :week | :month | :quarter_year | :half_year | :year | :overall, integer()) :: {:ok, Track.t()} | {:error, any()}
+  @spec fetch_top_track_from_index(
+          String.t(),
+          :week | :month | :quarter_year | :half_year | :year | :overall,
+          integer()
+        ) :: {:ok, Track.t()} | {:error, any()}
   def fetch_top_track_from_index(user, period, index) do
     user = URI.encode(user)
     period = timeframe(period) |> URI.encode()
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
-    url = "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&page=#{index}&period=#{period}&api_key=#{token}&format=json"
+
+    url =
+      "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&page=#{index}&period=#{period}&api_key=#{token}&format=json"
 
     with {:ok, response} <- HTTPoison.get(url),
          {:ok, body} <- Jason.decode(response.body),
@@ -119,20 +140,22 @@ defmodule GuessTheSong.Api.Lastfm do
     user = URI.encode(user)
     period = timeframe(period) |> URI.encode()
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
-    url = "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&period=#{period}&api_key=#{token}&format=json"
+
+    url =
+      "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&period=#{period}&api_key=#{token}&format=json"
 
     with {:ok, response} <- HTTPoison.get(url),
          %{body: body} <- response,
          {:ok, decoded} <- Jason.decode(body),
          %{"toptracks" => %{"@attr" => %{"total" => total}}} <- decoded do
-        {:ok, total}
+      {:ok, total}
     else
       {:error, reason} -> {:error, reason}
       %{} -> {:error, :invalid_response}
     end
   end
 
-  @spec timeframe(:week | :month | :quarter_year | :half_year | :year | :overall):: String.t()
+  @spec timeframe(:week | :month | :quarter_year | :half_year | :year | :overall) :: String.t()
   defp timeframe(period) do
     case period do
       :week -> "7day"
