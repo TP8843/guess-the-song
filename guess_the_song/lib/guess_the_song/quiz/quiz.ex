@@ -36,16 +36,14 @@ defmodule GuessTheSong.Quiz do
       |> Enum.filter(fn vs -> vs.channel_id == channel_id end)
       |> Enum.map(fn vs -> vs.user_id end)
 
-    sources =
-      GuessTheSong.DB.Repo.all(from(u in GuessTheSong.DB.User, where: u.discord_id in ^user_ids))
-
-    IO.inspect(sources)
-
-    Enum.each(sources, fn source ->
-      add_source(guild_id, source.discord_id, source.lastfm_username, max)
-    end)
-
-    :ok
+    case GuessTheSong.DB.Repo.all(from(u in GuessTheSong.DB.User, where: u.discord_id in ^user_ids)) do
+      [] -> {:error, :no_sources}
+      sources ->
+        Enum.each(sources, fn source ->
+          add_source(guild_id, source.discord_id, source.lastfm_username, max)
+        end)
+        {:ok, sources}
+    end
   end
 
   def run_round(guild_id) do
@@ -70,8 +68,6 @@ defmodule GuessTheSong.Quiz do
   """
   @spec run_quiz(String.t(), String.t(), integer()) :: :ok
   def run_quiz(guild_id, text_channel_id, rounds) do
-    add_source(guild_id, 315_179_109_661_671_425, "tp8843", 150)
-
     Enum.each(1..rounds, fn _ ->
       case run_round(guild_id) do
         {:ok, track} ->

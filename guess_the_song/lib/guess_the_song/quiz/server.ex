@@ -53,38 +53,40 @@ defmodule GuessTheSong.Quiz.Server do
       "Starting QuizServer for guild_id: #{guild_id} and text_channel_id: #{text_channel_id} and voice_channel_id: #{voice_channel_id} and rounds: #{rounds}"
     )
 
-    case GuessTheSong.Voice.Supervisor.start_session(guild_id, voice_channel_id) do
-      {:ok, _pid} ->
-        # Ensure that if the quiz process exits, the server is stopped
-        Process.flag(:trap_exit, true)
+    # Ensure that if the quiz process exits, the server is stopped
+    Process.flag(:trap_exit, true)
 
-        pid =
-          spawn_link(fn ->
-            GuessTheSong.Quiz.add_sources(guild_id, voice_channel_id, 100)
-            GuessTheSong.Quiz.run_quiz(guild_id, text_channel_id, rounds)
-          end)
+    pid =
+      spawn_link(fn ->
+        case GuessTheSong.Quiz.add_sources(guild_id, voice_channel_id, 100) do
+          {:ok, _} ->
+            case GuessTheSong.Voice.Supervisor.start_session(guild_id, voice_channel_id) do
+              {:ok, _pid} -> GuessTheSong.Quiz.run_quiz(guild_id, text_channel_id, rounds)
+              {:error, reason} -> {:stop, reason}
+            end
+          {:error, :no_sources} ->
+            Nostrum.Api.Message.create(text_channel_id, embed: GuessTheSong.Quiz.Embeds.error("No users with linked accounts in voice channel"))
+            {:stop, :no_sources}
+        end
+      end)
 
-        {:ok,
-         %{
-           info: %{
-             guild_id: guild_id,
-             text_channel_id: text_channel_id,
-             voice_channel_id: voice_channel_id,
-             quiz_pid: pid,
-             rounds: rounds
-           },
-           round: %{
-             number: 0,
-             running: false,
-             track: nil
-           },
-           sources: %{},
-           scores: %{}
-         }}
-
-      {:error, reason} ->
-        {:stop, reason}
-    end
+    {:ok,
+     %{
+       info: %{
+         guild_id: guild_id,
+         text_channel_id: text_channel_id,
+         voice_channel_id: voice_channel_id,
+         quiz_pid: pid,
+         rounds: rounds
+       },
+       round: %{
+         number: 0,
+         running: false,
+         track: nil
+       },
+       sources: %{},
+       scores: %{}
+     }}
   end
 
   @impl true
@@ -208,7 +210,7 @@ defmodule GuessTheSong.Quiz.Server do
   def handle_info({:EXIT, pid, reason}, state) do
     if pid == state.info.quiz_pid do
       IO.puts("Quiz crashed in server #{state.info.guild_id}: #{IO.inspect(reason)}")
-      Message.create(state.info.text_channel_id, "Oops. Something went wrong running the quiz :(")
+      Message.create(state.info.text_channel_id, embed: GuessTheSong.Quiz.Embeds.error("Oops. Something went wrong running the quiz :("))
       {:stop, :normal, state}
     else
       {:noreply, state}
@@ -219,9 +221,11 @@ defmodule GuessTheSong.Quiz.Server do
   def terminate(_reason, state) do
     IO.puts("Terminating GameServer for guild_id: #{state.info.guild_id}")
 
-    Nostrum.Api.Message.create(state.info.text_channel_id,
-      embed: GuessTheSong.Quiz.Embeds.game_end(state.scores)
-    )
+    if map_size(state.scores) > 0 do
+      Nostrum.Api.Message.create(state.info.text_channel_id,
+        embed: GuessTheSong.Quiz.Embeds.game_end(state.scores)
+      )
+    end
 
     GuessTheSong.Voice.Supervisor.stop_session(state.info.guild_id)
   end
