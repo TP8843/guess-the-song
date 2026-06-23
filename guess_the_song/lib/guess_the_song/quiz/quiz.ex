@@ -81,7 +81,7 @@ defmodule GuessTheSong.Quiz do
             guild_id,
             track.deezer.preview,
             :url,
-            volume: 0.1
+            volume: 0.4
           )
 
           Server.start_round(guild_id, track)
