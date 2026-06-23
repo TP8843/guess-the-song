@@ -55,12 +55,12 @@ defmodule GuessTheSong.Quiz.Server do
 
     case GuessTheSong.Voice.Supervisor.start_session(guild_id, voice_channel_id) do
       {:ok, _pid} ->
-
         # Ensure that if the quiz process exits, the server is stopped
         Process.flag(:trap_exit, true)
 
         pid =
           spawn_link(fn ->
+            GuessTheSong.Quiz.add_sources(guild_id, voice_channel_id, 100)
             GuessTheSong.Quiz.run_quiz(guild_id, text_channel_id, rounds)
           end)
 
