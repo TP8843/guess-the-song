@@ -3,10 +3,10 @@ defmodule GuessTheSong.Quiz.Server do
 
   alias Nostrum.Api.Message
 
-  def start_link({guild_id, text_channel_id, voice_channel_id, rounds}) do
+  def start_link({interaction, guild_id, text_channel_id, voice_channel_id, rounds}) do
     GenServer.start_link(
       __MODULE__,
-      {guild_id, text_channel_id, voice_channel_id, rounds},
+      {interaction, guild_id, text_channel_id, voice_channel_id, rounds},
       name:
         {:via, Registry,
          {GuessTheSong.Quiz.Registry, guild_id, %{text_channel_id: text_channel_id}}}
@@ -48,7 +48,7 @@ defmodule GuessTheSong.Quiz.Server do
   end
 
   @impl true
-  def init({guild_id, text_channel_id, voice_channel_id, rounds}) do
+  def init({interaction, guild_id, text_channel_id, voice_channel_id, rounds}) do
     IO.puts(
       "Starting QuizServer for guild_id: #{guild_id} and text_channel_id: #{text_channel_id} and voice_channel_id: #{voice_channel_id} and rounds: #{rounds}"
     )
@@ -59,13 +59,18 @@ defmodule GuessTheSong.Quiz.Server do
     pid =
       spawn_link(fn ->
         case GuessTheSong.Quiz.add_sources(guild_id, voice_channel_id, 100) do
-          {:ok, _} ->
+          {:ok, sources} ->
             case GuessTheSong.Voice.Supervisor.start_session(guild_id, voice_channel_id) do
-              {:ok, _pid} -> GuessTheSong.Quiz.run_quiz(guild_id, text_channel_id, rounds)
-              {:error, reason} -> {:stop, reason}
+              {:ok, _pid} ->
+                Nostrum.Api.Interaction.edit_response(interaction, %{type: 7, embeds: [GuessTheSong.Quiz.Embeds.starting(sources)]})
+                GuessTheSong.Quiz.run_quiz(guild_id, text_channel_id, rounds)
+              {:error, :already_active} ->
+                Nostrum.Api.Interaction.edit_response(interaction, %{type: 7, embeds: [GuessTheSong.Quiz.Embeds.error("Bot is already in a voice channel")]})
+                {:stop, :already_active}
             end
           {:error, :no_sources} ->
-            Nostrum.Api.Message.create(text_channel_id, embed: GuessTheSong.Quiz.Embeds.error("No users with linked accounts in voice channel"))
+            IO.puts("No users with linked accounts in voice channel")
+            Nostrum.Api.Interaction.edit_response(interaction, %{type: 7, embeds: [GuessTheSong.Quiz.Embeds.error("No users with linked accounts in voice channel")]})
             {:stop, :no_sources}
         end
       end)
@@ -125,7 +130,8 @@ defmodule GuessTheSong.Quiz.Server do
       new_round = %{
         track: track,
         number: state.round.number + 1,
-        running: true
+        running: true,
+        scores: %{}
       }
 
       {:noreply, put_in(state, [:round], new_round)}
@@ -134,9 +140,20 @@ defmodule GuessTheSong.Quiz.Server do
 
   def handle_cast({:end_round}, state) do
     if state.round.running do
+      state =
+        update_in(
+          state,
+          [:scores],
+          &Enum.reduce(state.round.scores, &1, fn {user_id, score}, acc ->
+            Map.update(acc, user_id, score, fn value ->
+              value + score
+            end)
+          end)
+        )
+
       Nostrum.Api.Message.create(state.info.text_channel_id,
         content: "Round End",
-        embed: GuessTheSong.Quiz.Embeds.round_end(state.round.track, state.scores)
+        embed: GuessTheSong.Quiz.Embeds.round_end(state.info.guild_id, state.round.track, state.round.scores, state.scores)
       )
 
       send(state.info.quiz_pid, {:round_ended})
@@ -176,7 +193,7 @@ defmodule GuessTheSong.Quiz.Server do
           acc =
             update_in(
               acc,
-              [:scores],
+              [:round, :scores],
               &Map.update(&1, msg.author.id, guess_element.value, fn value ->
                 value + guess_element.value
               end)
@@ -209,7 +226,7 @@ defmodule GuessTheSong.Quiz.Server do
   @impl true
   def handle_info({:EXIT, pid, reason}, state) do
     if pid == state.info.quiz_pid do
-      IO.puts("Quiz crashed in server #{state.info.guild_id}: #{IO.inspect(reason)}")
+      IO.inspect(reason)
       Message.create(state.info.text_channel_id, embed: GuessTheSong.Quiz.Embeds.error("Oops. Something went wrong running the quiz :("))
       {:stop, :normal, state}
     else
@@ -223,7 +240,7 @@ defmodule GuessTheSong.Quiz.Server do
 
     if map_size(state.scores) > 0 do
       Nostrum.Api.Message.create(state.info.text_channel_id,
-        embed: GuessTheSong.Quiz.Embeds.game_end(state.scores)
+        embed: GuessTheSong.Quiz.Embeds.game_end(state.info.guild_id, state.scores)
       )
     end
 

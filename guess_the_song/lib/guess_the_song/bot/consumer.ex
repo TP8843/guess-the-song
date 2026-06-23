@@ -33,16 +33,9 @@ defmodule GuessTheSong.Bot.Consumer do
   def handle_event(
         {:INTERACTION_CREATE, %{data: %{name: "link", options: options}} = interaction, _ws_state}
       ) do
+
+    Api.Interaction.create_response(interaction, %{type: 5})
     options = parse_options(options)
-
-    response = %{
-      type: 4,
-      data: %{
-        content: "Linking Last.fm account..."
-      }
-    }
-
-    Api.Interaction.create_response(interaction, response)
 
     Task.async(fn ->
       case GuessTheSong.Api.Lastfm.fetch_user(options["lastfm"]) do
@@ -63,22 +56,22 @@ defmodule GuessTheSong.Bot.Consumer do
           end
 
           Api.Interaction.edit_response(interaction, %{
-            content: "",
-            embed: GuessTheSong.Quiz.Embeds.link_account_success(user)
+            type: 7,
+            embeds: [GuessTheSong.Quiz.Embeds.link_account_success(user)]
           })
 
         {:error, :not_found} ->
           Api.Interaction.edit_response(interaction, %{
-            content: "",
-            embed: GuessTheSong.Quiz.Embeds.link_account_failure()
+            type: 7,
+            embeds: [GuessTheSong.Quiz.Embeds.link_account_failure()]
           })
 
         {:error, reason} ->
           IO.inspect(reason)
 
           Api.Interaction.edit_response(interaction, %{
-            content: "",
-            embed: GuessTheSong.Quiz.Embeds.error("Failed to link Last.fm account.")
+            type: 7,
+            embeds: [GuessTheSong.Quiz.Embeds.error("Failed to link Last.fm account.")]
           })
       end
     end)
@@ -89,29 +82,22 @@ defmodule GuessTheSong.Bot.Consumer do
   def handle_event({:INTERACTION_CREATE, %{data: %{name: "unlink"}} = interaction, _ws_state}) do
     alias GuessTheSong.DB
 
-    response = %{
-      type: 4,
-      data: %{
-        content: "Unlinking Last.fm account..."
-      }
-    }
-
-    Api.Interaction.create_response(interaction, response)
+    Api.Interaction.create_response(interaction, %{type: 5})
 
     case DB.User
          |> DB.Repo.get_by(discord_id: interaction.member.user_id) do
       nil ->
         Api.Interaction.edit_response(interaction, %{
-          content: "",
-          embed: GuessTheSong.Quiz.Embeds.unlink_account_failure()
+          type: 7,
+          embeds: [GuessTheSong.Quiz.Embeds.unlink_account_failure()]
         })
 
       user ->
         DB.Repo.delete(user)
 
         Api.Interaction.edit_response(interaction, %{
-          content: "",
-          embed: GuessTheSong.Quiz.Embeds.unlink_account_success(user.lastfm_username)
+          type: 7,
+          embeds: [GuessTheSong.Quiz.Embeds.unlink_account_success(user.lastfm_username)]
         })
     end
   end
@@ -120,6 +106,9 @@ defmodule GuessTheSong.Bot.Consumer do
         {:INTERACTION_CREATE, %{data: %{name: "start-quiz", options: options}} = interaction,
          _ws_state}
       ) do
+
+      # Defer the response to avoid timeout
+    Api.Interaction.create_response(interaction, %{type: 5})
     text_channel_id = interaction.channel_id
 
     options = parse_options(options)
@@ -127,41 +116,29 @@ defmodule GuessTheSong.Bot.Consumer do
     case GuessTheSong.Voice.find_voice_channel(interaction.guild_id, interaction.member.user_id) do
       {:ok, voice_channel_id} ->
         case GuessTheSong.Quiz.Supervisor.start_session(
+               interaction,
                interaction.guild_id,
                text_channel_id,
                voice_channel_id,
                options["rounds"]
              ) do
-          {:ok, _pid} ->
-            response = %{
-              type: 4,
-              data: %{
-                content: "Started quiz! :D"
-              }
-            }
-
-            Api.Interaction.create_response(interaction, response)
-
+          {:ok, _pid} -> :ok
           {:error, :already_active} ->
             response = %{
-              type: 4,
-              data: %{
-                content: "Quiz is already running!"
-              }
+              type: 7,
+              embeds: [GuessTheSong.Quiz.Embeds.error("Bot is already running in this server")]
             }
 
-            Api.Interaction.create_response(interaction, response)
+            Api.Interaction.edit_response(interaction, response)
         end
 
       {:error, :not_in_voice_channel} ->
         response = %{
-          type: 4,
-          data: %{
-            content: "You are not in a voice channel!"
-          }
+          type: 7,
+          embeds: [GuessTheSong.Quiz.Embeds.error("You are not in a voice channel!")]
         }
 
-        Api.Interaction.create_response(interaction, response)
+        Api.Interaction.edit_response(interaction, response)
     end
   end
 

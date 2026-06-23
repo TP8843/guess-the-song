@@ -34,6 +34,7 @@ defmodule GuessTheSong.Quiz.Track do
     defp normalize_text(text) do
       text
       |> String.trim()
+      |> String.normalize(:nfd)
       |> String.replace(~r/\s+/, " ")
       |> String.downcase()
       |> String.replace(~r/&/, "and")

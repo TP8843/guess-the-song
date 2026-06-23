@@ -39,6 +39,20 @@ defmodule GuessTheSong.Quiz.Embeds do
     }
   end
 
+  def starting(sources) do
+    %Nostrum.Struct.Embed{
+      title: "Starting Quiz",
+      fields: [
+        %Nostrum.Struct.Embed.Field{
+          name: "Sources",
+          value: Enum.reduce(sources, "", fn source, acc -> acc <> "[#{source.lastfm_username}](https://www.last.fm/user/#{source.lastfm_username})" <> " " end),
+          inline: false
+        }
+      ],
+      color: 0x00F400
+    }
+  end
+
   def correct_guess(guess_element) do
     %Nostrum.Struct.Embed{
       description:
@@ -47,7 +61,7 @@ defmodule GuessTheSong.Quiz.Embeds do
     }
   end
 
-  def round_end(track, scores) do
+  def round_end(guild_id, track, round_scores, scores) do
     %Nostrum.Struct.Embed{
       title: "#{track.deezer.title}",
       author: %Nostrum.Struct.Embed.Author{
@@ -64,7 +78,7 @@ defmodule GuessTheSong.Quiz.Embeds do
       fields: [
         %Nostrum.Struct.Embed.Field{
           name: "Current Scores:",
-          value: generate_scores_string(scores),
+          value: generate_scores_string(guild_id, scores, round_scores),
           inline: false
         }
       ],
@@ -75,19 +89,23 @@ defmodule GuessTheSong.Quiz.Embeds do
     }
   end
 
-  def generate_scores_string(scores) do
+  def generate_scores_string(guild_id, scores, round_scores \\ %{}) do
     Enum.reduce(scores, "", fn {user_id, score}, acc ->
-      acc <> "- <@#{user_id}> - #{score}"
+      {:ok, user} = Nostrum.Cache.MemberCache.get(guild_id, user_id)
+      case Map.has_key?(round_scores, user_id) do
+        true -> acc <> "- **#{user.nick} - #{score}** (+#{round_scores[user_id]})"
+        false -> acc <> "- **#{user.nick} - #{score}**"
+      end
     end)
   end
 
-  def game_end(scores) do
+  def game_end(guild_id, scores) do
     %Nostrum.Struct.Embed{
       title: "Game End",
       fields: [
         %Nostrum.Struct.Embed.Field{
           name: "Final Scores:",
-          value: generate_scores_string(scores),
+          value: generate_scores_string(guild_id, scores),
           inline: false
         }
       ],
