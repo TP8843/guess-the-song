@@ -33,7 +33,6 @@ defmodule GuessTheSong.Bot.Consumer do
   def handle_event(
         {:INTERACTION_CREATE, %{data: %{name: "link", options: options}} = interaction, _ws_state}
       ) do
-
     Api.Interaction.create_response(interaction, %{type: 5})
     options = parse_options(options)
 
@@ -106,8 +105,7 @@ defmodule GuessTheSong.Bot.Consumer do
         {:INTERACTION_CREATE, %{data: %{name: "start-quiz", options: options}} = interaction,
          _ws_state}
       ) do
-
-      # Defer the response to avoid timeout
+    # Defer the response to avoid timeout
     Api.Interaction.create_response(interaction, %{type: 5})
     text_channel_id = interaction.channel_id
 
@@ -120,9 +118,13 @@ defmodule GuessTheSong.Bot.Consumer do
                interaction.guild_id,
                text_channel_id,
                voice_channel_id,
-               options["rounds"]
+               options["rounds"],
+               options["tracks-per-user"],
+               options["period"]
              ) do
-          {:ok, _pid} -> :ok
+          {:ok, _pid} ->
+            :ok
+
           {:error, :already_active} ->
             response = %{
               type: 7,

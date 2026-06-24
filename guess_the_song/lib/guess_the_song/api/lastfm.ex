@@ -76,11 +76,11 @@ defmodule GuessTheSong.Api.Lastfm do
   @spec fetch_top_tracks(
           String.t(),
           integer(),
-          :week | :month | :quarter_year | :half_year | :year | :overall
+          String.t()
         ) :: {:ok, [Track.t()]} | {:error, any()}
   def fetch_top_tracks(user, limit, period) do
     user = URI.encode(user)
-    period = timeframe(period) |> URI.encode()
+    period = URI.encode(period)
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
 
     url =
@@ -102,7 +102,7 @@ defmodule GuessTheSong.Api.Lastfm do
   @spec fetch_random_top_track(
           String.t(),
           integer(),
-          :week | :month | :quarter_year | :half_year | :year | :overall
+          String.t()
         ) :: {:ok, Track.t()} | {:error, any()}
   def fetch_random_top_track(user, limit, period) do
     random_number = :rand.uniform(limit)
@@ -112,12 +112,12 @@ defmodule GuessTheSong.Api.Lastfm do
   @doc "Fetches top track for a given user, period, and index"
   @spec fetch_top_track_from_index(
           String.t(),
-          :week | :month | :quarter_year | :half_year | :year | :overall,
+          String.t(),
           integer()
         ) :: {:ok, Track.t()} | {:error, any()}
   def fetch_top_track_from_index(user, period, index) do
     user = URI.encode(user)
-    period = timeframe(period) |> URI.encode()
+    period = URI.encode(period)
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
 
     url =
@@ -138,7 +138,7 @@ defmodule GuessTheSong.Api.Lastfm do
 
   def get_top_track_count(user, period) do
     user = URI.encode(user)
-    period = timeframe(period) |> URI.encode()
+    period = URI.encode(period)
     token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
 
     url =
@@ -152,18 +152,6 @@ defmodule GuessTheSong.Api.Lastfm do
     else
       {:error, reason} -> {:error, reason}
       %{} -> {:error, :invalid_response}
-    end
-  end
-
-  @spec timeframe(:week | :month | :quarter_year | :half_year | :year | :overall) :: String.t()
-  defp timeframe(period) do
-    case period do
-      :week -> "7day"
-      :month -> "1month"
-      :quarter_year -> "3month"
-      :half_year -> "6month"
-      :year -> "12month"
-      :overall -> "overall"
     end
   end
 end

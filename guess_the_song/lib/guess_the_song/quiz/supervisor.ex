@@ -33,13 +33,25 @@ defmodule GuessTheSong.Quiz.Supervisor do
   @doc """
     Starts a new quiz session for the given guild.
   """
-  def start_session(interaction, guild_id, text_channel_id, voice_channel_id, rounds) do
+  def start_session(
+        interaction,
+        guild_id,
+        text_channel_id,
+        voice_channel_id,
+        rounds,
+        tracks_per_user,
+        period
+      ) do
     case active?(guild_id) or GuessTheSong.Voice.Supervisor.active?(guild_id) do
-      false -> DynamicSupervisor.start_child(__MODULE__, {
-        GuessTheSong.Quiz.Server,
-        {interaction, guild_id, text_channel_id, voice_channel_id, rounds}
-      })
-      true -> {:error, :already_active}
+      false ->
+        DynamicSupervisor.start_child(__MODULE__, {
+          GuessTheSong.Quiz.Server,
+          {interaction, guild_id, text_channel_id, voice_channel_id, rounds, tracks_per_user,
+           period}
+        })
+
+      true ->
+        {:error, :already_active}
     end
   end
 

@@ -45,7 +45,12 @@ defmodule GuessTheSong.Quiz.Embeds do
       fields: [
         %Nostrum.Struct.Embed.Field{
           name: "Sources",
-          value: Enum.reduce(sources, "", fn source, acc -> acc <> "[#{source.lastfm_username}](https://www.last.fm/user/#{source.lastfm_username})" <> " " end),
+          value:
+            Enum.reduce(sources, "", fn source, acc ->
+              acc <>
+                "[#{source.lastfm_username}](https://www.last.fm/user/#{source.lastfm_username})" <>
+                " "
+            end),
           inline: false
         }
       ],
@@ -92,6 +97,7 @@ defmodule GuessTheSong.Quiz.Embeds do
   def generate_scores_string(guild_id, scores, round_scores \\ %{}) do
     Enum.reduce(scores, "", fn {user_id, score}, acc ->
       {:ok, user} = Nostrum.Cache.MemberCache.get(guild_id, user_id)
+
       case Map.has_key?(round_scores, user_id) do
         true -> acc <> "- **#{user.nick} - #{score}** (+#{round_scores[user_id]})"
         false -> acc <> "- **#{user.nick} - #{score}**"
