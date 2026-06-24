@@ -270,17 +270,13 @@ defmodule GuessTheSong.Quiz.Server do
 
   @impl true
   def handle_info({:EXIT, pid, reason}, state) do
-    if pid == state.info.quiz_pid do
-      IO.inspect(reason)
+    IO.inspect(reason)
 
-      Message.create(state.info.text_channel_id,
-        embed: GuessTheSong.Quiz.Embeds.error("Oops. Something went wrong running the quiz :(")
-      )
+    Message.create(state.info.text_channel_id,
+      embed: GuessTheSong.Quiz.Embeds.error("Oops. Something went wrong running the quiz :(")
+    )
 
-      {:stop, :normal, state}
-    else
-      {:noreply, state}
-    end
+    {:stop, :normal, state}
   end
 
   @impl true
