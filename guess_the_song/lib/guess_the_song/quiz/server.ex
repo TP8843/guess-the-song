@@ -3,6 +3,9 @@ defmodule GuessTheSong.Quiz.Server do
 
   alias Nostrum.Api.Message
 
+  # How long to wait in the lobby before auto-starting (milliseconds)
+  @lobby_timeout_ms 60_000
+
   def start_link(
         {interaction, guild_id, text_channel_id, voice_channel_id, rounds, tracks_per_user,
          period}
@@ -20,6 +23,14 @@ defmodule GuessTheSong.Quiz.Server do
 
   def get_source(guild_id, discord_id),
     do: GenServer.call(via(guild_id), {:get_source, discord_id})
+
+  @spec join_lobby(guild_id :: integer, discord_id :: integer) :: :ok | {:error, atom()}
+  def join_lobby(guild_id, discord_id),
+    do: GenServer.call(via(guild_id), {:join_lobby, discord_id})
+
+  @spec start_now(guild_id :: integer, discord_id :: integer) :: :ok | {:error, atom()}
+  def start_now(guild_id, discord_id),
+    do: GenServer.call(via(guild_id), {:start_now, discord_id})
 
   @spec get_random_track(guild_id :: integer) ::
           {discord_id :: integer, lastfm_id :: String.t(), track :: integer}
@@ -63,74 +74,106 @@ defmodule GuessTheSong.Quiz.Server do
       "Starting QuizServer for guild_id: #{guild_id} and text_channel_id: #{text_channel_id} and voice_channel_id: #{voice_channel_id} and rounds: #{rounds} and tracks_per_user: #{tracks_per_user} and period: #{period}"
     )
 
-    # Ensure that if the quiz process exits, the server is stopped
     Process.flag(:trap_exit, true)
 
-    pid =
-      spawn_link(fn ->
-        case GuessTheSong.Quiz.add_sources(guild_id, voice_channel_id, tracks_per_user) do
-          {:ok, sources} ->
-            case GuessTheSong.Voice.Supervisor.start_session(guild_id, voice_channel_id) do
-              {:ok, _pid} ->
-                Nostrum.Api.Interaction.edit_response(interaction, %{
-                  type: 7,
-                  embeds: [GuessTheSong.Quiz.Embeds.starting(sources)]
-                })
+    # Fetch voice-channel members who have a linked Last.fm account
+    eligible = GuessTheSong.Quiz.eligible_users(guild_id, voice_channel_id)
 
-                GuessTheSong.Quiz.run_quiz(
-                  guild_id,
-                  text_channel_id,
-                  rounds,
-                  period
-                )
+    case eligible do
+      [] ->
+        Nostrum.Api.Interaction.edit_response(interaction, %{
+          type: 7,
+          embeds: [
+            GuessTheSong.Quiz.Embeds.error("No users with linked accounts in voice channel")
+          ]
+        })
 
-              {:error, :already_active} ->
-                Nostrum.Api.Interaction.edit_response(interaction, %{
-                  type: 7,
-                  embeds: [GuessTheSong.Quiz.Embeds.error("Bot is already in a voice channel")]
-                })
+        {:stop, :no_sources}
 
-                {:stop, :already_active}
-            end
+      _ ->
+        # Send the lobby embed and start the countdown timer
+        timer_ref = Process.send_after(self(), :lobby_timeout, @lobby_timeout_ms)
 
-          {:error, :no_sources} ->
-            IO.puts("No users with linked accounts in voice channel")
+        Nostrum.Api.Interaction.edit_response(interaction, %{
+          type: 7,
+          embeds: [GuessTheSong.Quiz.Embeds.lobby(eligible, @lobby_timeout_ms)],
+          components: GuessTheSong.Quiz.Embeds.lobby_components()
+        })
 
-            Nostrum.Api.Interaction.edit_response(interaction, %{
-              type: 7,
-              embeds: [
-                GuessTheSong.Quiz.Embeds.error("No users with linked accounts in voice channel")
-              ]
-            })
-
-            {:stop, :no_sources}
-        end
-      end)
-
-    {:ok,
-     %{
-       info: %{
-         guild_id: guild_id,
-         text_channel_id: text_channel_id,
-         voice_channel_id: voice_channel_id,
-         quiz_pid: pid,
-         rounds: rounds,
-         tracks_per_user: tracks_per_user,
-         period: period
-       },
-       round: %{
-         number: 0,
-         running: false,
-         track: nil
-       },
-       sources: %{},
-       scores: %{}
-     }}
+        {:ok,
+         %{
+           phase: :lobby,
+           lobby: %{
+             interaction: interaction,
+             eligible: eligible,
+             opted_in: MapSet.new(),
+             timer_ref: timer_ref,
+             initiator_id: interaction.member.user_id
+           },
+           info: %{
+             guild_id: guild_id,
+             text_channel_id: text_channel_id,
+             voice_channel_id: voice_channel_id,
+             quiz_pid: nil,
+             rounds: rounds,
+             tracks_per_user: tracks_per_user,
+             period: period
+           },
+           round: %{
+             number: 0,
+             running: false,
+             track: nil
+           },
+           sources: %{},
+           scores: %{}
+         }}
+    end
   end
 
   @impl true
   def handle_call(:get_info, _from, state) do
     {:reply, state.info, state}
+  end
+
+  @impl true
+  def handle_call({:join_lobby, discord_id}, _from, %{phase: :lobby} = state) do
+    eligible_ids = Enum.map(state.lobby.eligible, & &1.discord_id)
+
+    cond do
+      discord_id not in eligible_ids ->
+        {:reply, {:error, :not_eligible}, state}
+
+      MapSet.member?(state.lobby.opted_in, discord_id) ->
+        {:reply, {:error, :already_joined}, state}
+
+      true ->
+        new_opted_in = MapSet.put(state.lobby.opted_in, discord_id)
+        state = put_in(state, [:lobby, :opted_in], new_opted_in)
+        update_lobby_embed(state)
+        {:reply, :ok, state}
+    end
+  end
+
+  def handle_call({:join_lobby, _discord_id}, _from, state) do
+    {:reply, {:error, :not_in_lobby}, state}
+  end
+
+  @impl true
+  def handle_call({:start_now, discord_id}, _from, %{phase: :lobby} = state) do
+    if discord_id == state.lobby.initiator_id do
+      Process.cancel_timer(state.lobby.timer_ref)
+
+      case launch_quiz(state) do
+        {:ok, new_state} -> {:reply, :ok, new_state}
+        {:error, :no_players, new_state} -> {:stop, :normal, {:error, :no_players}, new_state}
+      end
+    else
+      {:reply, {:error, :not_initiator}, state}
+    end
+  end
+
+  def handle_call({:start_now, _discord_id}, _from, state) do
+    {:reply, {:error, :not_in_lobby}, state}
   end
 
   @impl true
@@ -263,6 +306,14 @@ defmodule GuessTheSong.Quiz.Server do
   end
 
   @impl true
+  def handle_info(:lobby_timeout, %{phase: :lobby} = state) do
+    case launch_quiz(state) do
+      {:ok, new_state} -> {:noreply, new_state}
+      {:error, :no_players, _state} -> {:stop, :normal, state}
+    end
+  end
+
+  @impl true
   def handle_info({:EXIT, _pid, :normal}, state) do
     IO.puts("Quiz ended normally")
     {:stop, :normal, state}
@@ -277,6 +328,91 @@ defmodule GuessTheSong.Quiz.Server do
     )
 
     {:stop, :normal, state}
+  end
+
+  # ---------------------------------------------------------------------------
+  # Private helpers
+  # ---------------------------------------------------------------------------
+
+  defp update_lobby_embed(state) do
+    opted_in_users =
+      Enum.filter(state.lobby.eligible, fn u ->
+        MapSet.member?(state.lobby.opted_in, u.discord_id)
+      end)
+
+    Nostrum.Api.Interaction.edit_response(state.lobby.interaction, %{
+      type: 7,
+      embeds: [
+        GuessTheSong.Quiz.Embeds.lobby(state.lobby.eligible, @lobby_timeout_ms, opted_in_users)
+      ],
+      components: GuessTheSong.Quiz.Embeds.lobby_components()
+    })
+  end
+
+  defp launch_quiz(%{phase: :lobby} = state) do
+    interaction = state.lobby.interaction
+    opted_in = state.lobby.opted_in
+    info = state.info
+
+    opted_in_users =
+      Enum.filter(state.lobby.eligible, fn u ->
+        MapSet.member?(opted_in, u.discord_id)
+      end)
+
+    case opted_in_users do
+      [] ->
+        Nostrum.Api.Interaction.edit_response(interaction, %{
+          type: 7,
+          embeds: [GuessTheSong.Quiz.Embeds.error("Nobody joined the lobby — quiz cancelled.")],
+          components: []
+        })
+
+        {:error, :no_players, state}
+
+      participants ->
+        pid =
+          spawn_link(fn ->
+            Enum.each(participants, fn user ->
+              GuessTheSong.Quiz.add_source(
+                info.guild_id,
+                user.discord_id,
+                user.lastfm_username,
+                info.tracks_per_user
+              )
+            end)
+
+            case GuessTheSong.Voice.Supervisor.start_session(info.guild_id, info.voice_channel_id) do
+              {:ok, _pid} ->
+                Nostrum.Api.Interaction.edit_response(interaction, %{
+                  type: 7,
+                  embeds: [GuessTheSong.Quiz.Embeds.starting(participants)],
+                  components: []
+                })
+
+                GuessTheSong.Quiz.run_quiz(
+                  info.guild_id,
+                  info.text_channel_id,
+                  info.rounds,
+                  info.period
+                )
+
+              {:error, :already_active} ->
+                Nostrum.Api.Interaction.edit_response(interaction, %{
+                  type: 7,
+                  embeds: [GuessTheSong.Quiz.Embeds.error("Bot is already in a voice channel")],
+                  components: []
+                })
+            end
+          end)
+
+        new_state =
+          state
+          |> Map.put(:phase, :running)
+          |> Map.delete(:lobby)
+          |> put_in([:info, :quiz_pid], pid)
+
+        {:ok, new_state}
+    end
   end
 
   @impl true

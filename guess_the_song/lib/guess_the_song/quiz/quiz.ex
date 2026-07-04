@@ -25,10 +25,11 @@ defmodule GuessTheSong.Quiz do
   end
 
   @doc """
-    Adds all sources from a voice channel to the quiz
+    Returns all users in a voice channel who have a linked Last.fm account.
+    Each entry is a `GuessTheSong.DB.User` struct.
   """
-  @spec add_sources(String.t(), integer(), integer()) :: :ok
-  def add_sources(guild_id, channel_id, max \\ 100) do
+  @spec eligible_users(String.t(), integer()) :: [GuessTheSong.DB.User.t()]
+  def eligible_users(guild_id, channel_id) do
     {:ok, guild} = Nostrum.Cache.GuildCache.get(guild_id)
 
     user_ids =
@@ -36,19 +37,7 @@ defmodule GuessTheSong.Quiz do
       |> Enum.filter(fn vs -> vs.channel_id == channel_id end)
       |> Enum.map(fn vs -> vs.user_id end)
 
-    case GuessTheSong.DB.Repo.all(
-           from(u in GuessTheSong.DB.User, where: u.discord_id in ^user_ids)
-         ) do
-      [] ->
-        {:error, :no_sources}
-
-      sources ->
-        Enum.each(sources, fn source ->
-          add_source(guild_id, source.discord_id, source.lastfm_username, max)
-        end)
-
-        {:ok, sources}
-    end
+    GuessTheSong.DB.Repo.all(from(u in GuessTheSong.DB.User, where: u.discord_id in ^user_ids))
   end
 
   @spec run_round(String.t(), String.t()) :: :ok
