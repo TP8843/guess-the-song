@@ -39,6 +39,61 @@ defmodule GuessTheSong.Quiz.Embeds do
     }
   end
 
+  @doc """
+  Lobby embed shown while waiting for players to opt in.
+
+  - `eligible`   – all DB.User structs in the voice channel with linked accounts
+  - `timeout_ms` – lobby duration in milliseconds (shown as seconds)
+  - `opted_in`   – list of DB.User structs who have already clicked Join (optional)
+  """
+  def lobby(eligible, timeout_ms, opted_in \\ []) do
+    timeout_s = div(timeout_ms, 1000)
+
+    eligible_value =
+      Enum.map_join(eligible, "\n", fn u ->
+        joined = Enum.any?(opted_in, &(&1.discord_id == u.discord_id))
+        prefix = if joined, do: "✅", else: "⬜"
+        "#{prefix} [#{u.lastfm_username}](https://www.last.fm/user/#{u.lastfm_username})"
+      end)
+
+    %Nostrum.Struct.Embed{
+      title: "🎵 Guess The Song — Lobby",
+      description:
+        "Click **Join** to include your Last.fm library in this quiz.\n" <>
+          "The quiz starts automatically in **#{timeout_s}s**, or when the host clicks **Start Now**.",
+      fields: [
+        %Nostrum.Struct.Embed.Field{
+          name: "Eligible players (#{length(eligible)})",
+          value: eligible_value,
+          inline: false
+        }
+      ],
+      color: 0x5865F2
+    }
+  end
+
+  def lobby_components do
+    [
+      %{
+        type: 1,
+        components: [
+          %{
+            type: 2,
+            style: 3,
+            label: "Join",
+            custom_id: "join_quiz"
+          },
+          %{
+            type: 2,
+            style: 1,
+            label: "Start Now",
+            custom_id: "start_quiz_now"
+          }
+        ]
+      }
+    ]
+  end
+
   def starting(sources) do
     %Nostrum.Struct.Embed{
       title: "Starting Quiz",

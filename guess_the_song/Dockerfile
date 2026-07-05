@@ -1,5 +1,5 @@
 ARG ELIXIR_VERSION=1.19.5
-ARG OTP_VERSION=27
+ARG OTP_VERSION=28
 
 FROM elixir:${ELIXIR_VERSION}-otp-${OTP_VERSION} AS builder
 
@@ -30,7 +30,7 @@ COPY config/runtime.exs config/
 
 RUN mix release
 
-FROM debian:bookworm-slim AS final
+FROM debian:trixie-slim AS final
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates ffmpeg \
