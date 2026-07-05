@@ -30,7 +30,7 @@ COPY config/runtime.exs config/
 
 RUN mix release
 
-FROM debian:bookworm-slim AS final
+FROM debian:trixie-slim AS final
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates ffmpeg \
