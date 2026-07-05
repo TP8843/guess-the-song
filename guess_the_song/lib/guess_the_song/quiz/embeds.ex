@@ -154,8 +154,8 @@ defmodule GuessTheSong.Quiz.Embeds do
       {:ok, user} = Nostrum.Cache.MemberCache.get(guild_id, user_id)
 
       case Map.has_key?(round_scores, user_id) do
-        true -> acc <> "- **#{user.nick} - #{score}** (+#{round_scores[user_id]})"
-        false -> acc <> "- **#{user.nick} - #{score}**"
+        true -> acc <> "- **#{user.nick} - #{score}** (+#{round_scores[user_id]})\n"
+        false -> acc <> "- **#{user.nick} - #{score}**\n"
       end
     end)
   end
