@@ -53,17 +53,17 @@ defmodule GuessTheSong.Quiz.Track do
     end
   end
 
+  alias GuessTheSong.Api
+
   defstruct [:source, :guess_elements, :correct_guesses, :lastfm, :deezer]
 
   @type t :: %__MODULE__{
-          source: integer(),
+          source: Api.Lastfm.User.t(),
           guess_elements: [GuessElement.t()],
           correct_guesses: integer(),
           lastfm: Api.Lastfm.Track.t(),
           deezer: Api.Deezer.Track.t()
         }
-
-  alias GuessTheSong.Api
 
   @spec create(Api.Lastfm.User.t(), Api.Lastfm.Track.t(), Api.Deezer.Track.t()) :: t
   def create(source, lastfm, deezer) do

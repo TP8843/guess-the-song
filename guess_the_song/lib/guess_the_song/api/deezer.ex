@@ -50,7 +50,6 @@ defmodule GuessTheSong.Api.Deezer do
   @spec find_match(GuessTheSong.Api.Lastfm.Track.t()) :: {:ok, map()} | {:error, any()}
   def find_match(lastfm_track) do
     query = "#{lastfm_track.title} #{lastfm_track.artist}"
-    query = URI.encode(query)
 
     with  {:ok, response} <- search_fuzzy(query),
           %{body: body} <- response,
@@ -60,29 +59,31 @@ defmodule GuessTheSong.Api.Deezer do
           {:ok, response} <- fetch_track(head["id"]),
           %{body: body} <- response,
           {:ok, decoded} <- Jason.decode(body),
+          # Deezer returns errors as a 200 with an "error" body, so check it's a track
+          %{"contributors" => _} <- decoded,
           track <- Track.parseJSON(decoded)
     do
       {:ok, track}
     else
       {:error, error} -> {:error, error}
       [] -> {:error, :not_found}
-      %{} -> {:error, :invalid_response}
+      _ -> {:error, :invalid_response}
     end
   end
 
   @spec search_fuzzy(String.t(), pos_integer()) :: HTTPoison.Response.t()
   defp search_fuzzy(query, limit \\ 1) do
-    query = URI.encode(query)
-    url = "https://api.deezer.com/search?q=#{query}&limit=#{limit}"
+    # encode_query escapes reserved characters like & and # that URI.encode leaves alone
+    params = URI.encode_query(q: query, limit: limit)
+    url = "https://api.deezer.com/search?#{params}"
     HTTPoison.get(url)
   end
 
   @spec search_exact(String.t(), String.t(), pos_integer()) :: HTTPoison.Response.t()
   defp search_exact(title, artist, limit \\ 1) do
-    title = URI.encode(title)
-    artist = URI.encode(artist)
-    search = URI.encode("artist:\"#{artist}\",title:\"#{title}\"")
-    url = "https://api.deezer.com/search?q=#{search}&limit=#{limit}"
+    search = "artist:\"#{artist}\",title:\"#{title}\""
+    params = URI.encode_query(q: search, limit: limit)
+    url = "https://api.deezer.com/search?#{params}"
     HTTPoison.get(url)
   end
 

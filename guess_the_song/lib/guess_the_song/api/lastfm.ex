@@ -21,7 +21,7 @@ defmodule GuessTheSong.Api.Lastfm do
         id: Map.get(track, "id"),
         title: Map.get(track, "name"),
         artist: Map.get(track, "artist", %{}) |> Map.get("name"),
-        image_url: Map.get(track, "image", []) |> List.last() |> Map.get("#text"),
+        image_url: Map.get(track, "image", []) |> List.last(%{}) |> Map.get("#text"),
         url: Map.get(track, "url")
       }
     end
@@ -47,7 +47,7 @@ defmodule GuessTheSong.Api.Lastfm do
         name: Map.get(user, "name"),
         url: Map.get(user, "url"),
         playcount: Map.get(user, "playcount"),
-        image: Enum.at(Map.get(user, "image"), 3) |> Map.get("#text")
+        image: Map.get(user, "image", []) |> Enum.at(3, %{}) |> Map.get("#text")
       }
     end
   end
@@ -68,7 +68,9 @@ defmodule GuessTheSong.Api.Lastfm do
       # Handle user not found
       {:ok, %{status_code: 404}} -> {:error, :not_found}
       # Handle other errors
+      {:ok, %{status_code: status}} -> {:error, {:http_status, status}}
       {:error, reason} -> {:error, reason}
+      _ -> {:error, :invalid_response}
     end
   end
 
@@ -90,11 +92,11 @@ defmodule GuessTheSong.Api.Lastfm do
          {:ok, body} <- Jason.decode(response.body),
          %{"toptracks" => toptracks} <- body,
          %{"track" => track} <- toptracks,
-         tracks <- Enum.map(track, fn t -> Track.parseJSON(t) end) do
+         tracks <- track |> List.wrap() |> Enum.map(&Track.parseJSON/1) do
       {:ok, tracks}
     else
       {:error, reason} -> {:error, reason}
-      %{} -> {:error, :invalid_response}
+      _ -> {:error, :invalid_response}
     end
   end
 
@@ -127,12 +129,14 @@ defmodule GuessTheSong.Api.Lastfm do
          {:ok, body} <- Jason.decode(response.body),
          %{"toptracks" => toptracks} <- body,
          %{"track" => track} <- toptracks,
-         tracks <- Enum.map(track, fn t -> Track.parseJSON(t) end),
+         tracks <- track |> List.wrap() |> Enum.map(&Track.parseJSON/1),
          [track | _] <- tracks do
       {:ok, track}
     else
+      # Index is past the end of the user's top tracks
+      [] -> {:error, :not_found}
       {:error, reason} -> {:error, reason}
-      %{} -> {:error, :invalid_response}
+      _ -> {:error, :invalid_response}
     end
   end
 
@@ -147,11 +151,12 @@ defmodule GuessTheSong.Api.Lastfm do
     with {:ok, response} <- HTTPoison.get(url),
          %{body: body} <- response,
          {:ok, decoded} <- Jason.decode(body),
-         %{"toptracks" => %{"@attr" => %{"total" => total}}} <- decoded do
-      {:ok, total}
+         %{"toptracks" => %{"@attr" => %{"total" => total}}} <- decoded,
+         {total_int, ""} <- Integer.parse(total) do
+      {:ok, total_int}
     else
       {:error, reason} -> {:error, reason}
-      %{} -> {:error, :invalid_response}
+      _ -> {:error, :invalid_response}
     end
   end
 end

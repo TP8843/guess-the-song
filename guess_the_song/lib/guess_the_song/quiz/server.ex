@@ -2,9 +2,14 @@ defmodule GuessTheSong.Quiz.Server do
   use GenServer, restart: :transient
 
   alias Nostrum.Api.Message
+  alias GuessTheSong.Api
+  alias GuessTheSong.Quiz.Track
 
   # How long to wait in the lobby before auto-starting (milliseconds)
   @lobby_timeout_ms 60_000
+
+  # How long a round lasts before it ends automatically (Deezer previews are 30s)
+  @round_duration_ms 31_000
 
   def start_link(
         {interaction, guild_id, text_channel_id, voice_channel_id, rounds, tracks_per_user,
@@ -26,14 +31,15 @@ defmodule GuessTheSong.Quiz.Server do
 
   @spec join_lobby(guild_id :: integer, discord_id :: integer) :: :ok | {:error, atom()}
   def join_lobby(guild_id, discord_id),
-    do: GenServer.call(via(guild_id), {:join_lobby, discord_id})
+    do: safe_call(guild_id, {:join_lobby, discord_id})
 
   @spec start_now(guild_id :: integer, discord_id :: integer) :: :ok | {:error, atom()}
   def start_now(guild_id, discord_id),
-    do: GenServer.call(via(guild_id), {:start_now, discord_id})
+    do: safe_call(guild_id, {:start_now, discord_id})
 
   @spec get_random_track(guild_id :: integer) ::
-          {discord_id :: integer, lastfm_id :: String.t(), track :: integer}
+          {:ok, {discord_id :: integer, lastfm :: Api.Lastfm.User.t(), track :: integer}}
+          | {:error, :no_tracks}
   def get_random_track(guild_id), do: GenServer.call(via(guild_id), :get_random_track)
 
   @spec add_source(
@@ -42,8 +48,8 @@ defmodule GuessTheSong.Quiz.Server do
           lastfm :: Api.Lastfm.User.t(),
           count :: integer
         ) :: :ok
-  def add_source(guild_id, discord_id, lastfm_id, count),
-    do: GenServer.cast(via(guild_id), {:add_source, {discord_id, lastfm_id, count}})
+  def add_source(guild_id, discord_id, lastfm, count),
+    do: GenServer.cast(via(guild_id), {:add_source, {discord_id, lastfm, count}})
 
   @spec remove_source(guild_id :: integer, discord_id :: integer) :: :ok
   def remove_source(guild_id, discord_id),
@@ -55,14 +61,27 @@ defmodule GuessTheSong.Quiz.Server do
   @spec end_round(guild_id :: integer) :: :ok
   def end_round(guild_id), do: GenServer.cast(via(guild_id), {:end_round})
 
-  @spec process_message(guild_id :: integer, msg :: Message.t()) :: :ok
+  @spec process_message(guild_id :: integer, msg :: Nostrum.Struct.Message.t()) :: :ok
   def process_message(guild_id, msg), do: GenServer.cast(via(guild_id), {:process_message, msg})
 
   @spec stop(guild_id :: integer) :: :ok
-  def stop(guild_id), do: GenServer.stop(via(guild_id))
+  def stop(guild_id) do
+    GenServer.stop(via(guild_id))
+  catch
+    # Quiz already stopped (e.g. two /end-quiz commands at once)
+    :exit, _ -> :ok
+  end
 
   defp via(guild_id) do
     {:via, Registry, {GuessTheSong.Quiz.Registry, guild_id}}
+  end
+
+  # Calls the quiz server, returning an error instead of exiting if it stops
+  # before or during the call (e.g. a button clicked just as the quiz ends)
+  defp safe_call(guild_id, message) do
+    GenServer.call(via(guild_id), message)
+  catch
+    :exit, _ -> {:error, :not_active}
   end
 
   @impl true
@@ -183,11 +202,22 @@ defmodule GuessTheSong.Quiz.Server do
 
   @impl true
   def handle_call(:get_random_track, _from, state) do
-    {discord_id, source} = state.sources |> Map.to_list() |> Enum.random()
-    track = Enum.random(source.choices)
+    # Only pick from sources that still have unplayed tracks
+    available = Enum.filter(state.sources, fn {_, source} -> MapSet.size(source.choices) > 0 end)
 
-    new_state = update_in(state, [:sources, discord_id, :choices], &(&1 |> MapSet.delete(track)))
-    {:reply, {discord_id, source.lastfm, track}, new_state}
+    case available do
+      [] ->
+        {:reply, {:error, :no_tracks}, state}
+
+      _ ->
+        {discord_id, source} = Enum.random(available)
+        track = Enum.random(source.choices)
+
+        new_state =
+          update_in(state, [:sources, discord_id, :choices], &(&1 |> MapSet.delete(track)))
+
+        {:reply, {:ok, {discord_id, source.lastfm, track}}, new_state}
+    end
   end
 
   @impl true
@@ -209,11 +239,15 @@ defmodule GuessTheSong.Quiz.Server do
     if state.round.running do
       {:noreply, state}
     else
+      number = state.round.number + 1
+      timer_ref = Process.send_after(self(), {:round_timeout, number}, @round_duration_ms)
+
       new_round = %{
         track: track,
-        number: state.round.number + 1,
+        number: number,
         running: true,
-        scores: %{}
+        scores: %{},
+        timer_ref: timer_ref
       }
 
       {:noreply, put_in(state, [:round], new_round)}
@@ -222,6 +256,8 @@ defmodule GuessTheSong.Quiz.Server do
 
   def handle_cast({:end_round}, state) do
     if state.round.running do
+      Process.cancel_timer(state.round.timer_ref)
+
       state =
         update_in(
           state,
@@ -237,7 +273,6 @@ defmodule GuessTheSong.Quiz.Server do
         content: "Round End",
         embed:
           GuessTheSong.Quiz.Embeds.round_end(
-            state.info.guild_id,
             state.round.track,
             state.round.scores,
             state.scores
@@ -252,7 +287,7 @@ defmodule GuessTheSong.Quiz.Server do
   end
 
   @impl true
-  def handle_cast({:process_message, msg}, state) do
+  def handle_cast({:process_message, msg}, %{round: %{running: true}} = state) do
     alias GuessTheSong.Quiz.Track.GuessElement
 
     new_state =
@@ -305,6 +340,11 @@ defmodule GuessTheSong.Quiz.Server do
     {:noreply, new_state}
   end
 
+  # Ignore messages when the round is not running
+  def handle_cast({:process_message, _msg}, %{round: %{running: false}} = state) do
+    {:noreply, state}
+  end
+
   @impl true
   def handle_info(:lobby_timeout, %{phase: :lobby} = state) do
     case launch_quiz(state) do
@@ -312,6 +352,15 @@ defmodule GuessTheSong.Quiz.Server do
       {:error, :no_players, _state} -> {:stop, :normal, state}
     end
   end
+
+  # Only end the round if the timeout belongs to the current round
+  @impl true
+  def handle_info({:round_timeout, number}, %{round: %{number: number, running: true}} = state) do
+    GuessTheSong.Quiz.Server.end_round(state.info.guild_id)
+    {:noreply, state}
+  end
+
+  def handle_info({:round_timeout, _number}, state), do: {:noreply, state}
 
   @impl true
   def handle_info({:EXIT, _pid, :normal}, state) do
@@ -372,36 +421,58 @@ defmodule GuessTheSong.Quiz.Server do
       participants ->
         pid =
           spawn_link(fn ->
-            Enum.each(participants, fn user ->
-              GuessTheSong.Quiz.add_source(
-                info.guild_id,
-                user.discord_id,
-                user.lastfm_username,
-                info.tracks_per_user
-              )
-            end)
+            # Skip any players whose Last.fm library couldn't be loaded
+            sources =
+              Enum.filter(participants, fn user ->
+                case GuessTheSong.Quiz.add_source(
+                       info.guild_id,
+                       user.discord_id,
+                       user.lastfm_username,
+                       info.tracks_per_user
+                     ) do
+                  :ok ->
+                    true
 
-            case GuessTheSong.Voice.Supervisor.start_session(info.guild_id, info.voice_channel_id) do
-              {:ok, _pid} ->
+                  {:error, reason} ->
+                    IO.inspect(reason, label: "Failed to add source #{user.lastfm_username}")
+                    false
+                end
+              end)
+
+            case sources do
+              [] ->
                 Nostrum.Api.Interaction.edit_response(interaction, %{
                   type: 7,
-                  embeds: [GuessTheSong.Quiz.Embeds.starting(participants)],
+                  embeds: [GuessTheSong.Quiz.Embeds.error("Couldn't load any Last.fm libraries")],
                   components: []
                 })
 
-                GuessTheSong.Quiz.run_quiz(
-                  info.guild_id,
-                  info.text_channel_id,
-                  info.rounds,
-                  info.period
-                )
+              _ ->
+                case GuessTheSong.Voice.Supervisor.start_session(
+                       info.guild_id,
+                       info.voice_channel_id
+                     ) do
+                  {:ok, _pid} ->
+                    Nostrum.Api.Interaction.edit_response(interaction, %{
+                      type: 7,
+                      embeds: [GuessTheSong.Quiz.Embeds.starting(sources)],
+                      components: []
+                    })
 
-              {:error, :already_active} ->
-                Nostrum.Api.Interaction.edit_response(interaction, %{
-                  type: 7,
-                  embeds: [GuessTheSong.Quiz.Embeds.error("Bot is already in a voice channel")],
-                  components: []
-                })
+                    GuessTheSong.Quiz.run_quiz(
+                      info.guild_id,
+                      info.text_channel_id,
+                      info.rounds,
+                      info.period
+                    )
+
+                  {:error, :already_active} ->
+                    Nostrum.Api.Interaction.edit_response(interaction, %{
+                      type: 7,
+                      embeds: [GuessTheSong.Quiz.Embeds.error("Bot is already in a voice channel")],
+                      components: []
+                    })
+                end
             end
           end)
 
@@ -421,7 +492,7 @@ defmodule GuessTheSong.Quiz.Server do
 
     if map_size(state.scores) > 0 do
       Nostrum.Api.Message.create(state.info.text_channel_id,
-        embed: GuessTheSong.Quiz.Embeds.game_end(state.info.guild_id, state.scores)
+        embed: GuessTheSong.Quiz.Embeds.game_end(state.scores)
       )
     end
 

@@ -17,19 +17,6 @@ defmodule GuessTheSong.Bot.Consumer do
     end
   end
 
-  def handle_event({:VOICE_SPEAKING_UPDATE, %{speaking: false, guild_id: guild_id}, _ws_state}) do
-    # Audio has finished playing!
-    case GuessTheSong.Quiz.Supervisor.active?(guild_id) do
-      true -> GuessTheSong.Quiz.Server.end_round(guild_id)
-      false -> :ok
-    end
-  end
-
-  def handle_event({:VOICE_SPEAKING_UPDATE, %{speaking: true, guild_id: _guild_id}, _ws_state}) do
-    # Audio started playing
-    :ok
-  end
-
   def handle_event(
         {:INTERACTION_CREATE, %{data: %{name: "link", options: options}} = interaction, _ws_state}
       ) do
@@ -151,42 +138,39 @@ defmodule GuessTheSong.Bot.Consumer do
     guild_id = interaction.guild_id
     discord_id = interaction.member.user_id
 
-    case GuessTheSong.Quiz.Supervisor.active?(guild_id) do
-      false ->
+    case GuessTheSong.Quiz.Server.join_lobby(guild_id, discord_id) do
+      :ok ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{content: "You've joined the quiz! 🎵", flags: 64}
+        })
+
+      {:error, :already_joined} ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{content: "You've already joined.", flags: 64}
+        })
+
+      {:error, :not_eligible} ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{
+            content: "You need a linked Last.fm account to join. Use `/link` first.",
+            flags: 64
+          }
+        })
+
+      {:error, :not_in_lobby} ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{content: "The quiz has already started.", flags: 64}
+        })
+
+      {:error, :not_active} ->
         Api.Interaction.create_response(interaction, %{
           type: 4,
           data: %{content: "No quiz lobby is active.", flags: 64}
         })
-
-      true ->
-        case GuessTheSong.Quiz.Server.join_lobby(guild_id, discord_id) do
-          :ok ->
-            Api.Interaction.create_response(interaction, %{
-              type: 4,
-              data: %{content: "You've joined the quiz! 🎵", flags: 64}
-            })
-
-          {:error, :already_joined} ->
-            Api.Interaction.create_response(interaction, %{
-              type: 4,
-              data: %{content: "You've already joined.", flags: 64}
-            })
-
-          {:error, :not_eligible} ->
-            Api.Interaction.create_response(interaction, %{
-              type: 4,
-              data: %{
-                content: "You need a linked Last.fm account to join. Use `/link` first.",
-                flags: 64
-              }
-            })
-
-          {:error, :not_in_lobby} ->
-            Api.Interaction.create_response(interaction, %{
-              type: 4,
-              data: %{content: "The quiz has already started.", flags: 64}
-            })
-        end
     end
   end
 
@@ -197,39 +181,36 @@ defmodule GuessTheSong.Bot.Consumer do
     guild_id = interaction.guild_id
     discord_id = interaction.member.user_id
 
-    case GuessTheSong.Quiz.Supervisor.active?(guild_id) do
-      false ->
+    case GuessTheSong.Quiz.Server.start_now(guild_id, discord_id) do
+      :ok ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{content: "Starting now!", flags: 64}
+        })
+
+      {:error, :no_players} ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{content: "Nobody has joined the lobby — quiz cancelled.", flags: 64}
+        })
+
+      {:error, :not_initiator} ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{content: "Only the person who started the quiz can do that.", flags: 64}
+        })
+
+      {:error, :not_in_lobby} ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{content: "The quiz has already started.", flags: 64}
+        })
+
+      {:error, :not_active} ->
         Api.Interaction.create_response(interaction, %{
           type: 4,
           data: %{content: "No quiz lobby is active.", flags: 64}
         })
-
-      true ->
-        case GuessTheSong.Quiz.Server.start_now(guild_id, discord_id) do
-          :ok ->
-            Api.Interaction.create_response(interaction, %{
-              type: 4,
-              data: %{content: "Starting now!", flags: 64}
-            })
-
-          {:error, :no_players} ->
-            Api.Interaction.create_response(interaction, %{
-              type: 4,
-              data: %{content: "Nobody has joined the lobby — quiz cancelled.", flags: 64}
-            })
-
-          {:error, :not_initiator} ->
-            Api.Interaction.create_response(interaction, %{
-              type: 4,
-              data: %{content: "Only the person who started the quiz can do that.", flags: 64}
-            })
-
-          {:error, :not_in_lobby} ->
-            Api.Interaction.create_response(interaction, %{
-              type: 4,
-              data: %{content: "The quiz has already started.", flags: 64}
-            })
-        end
     end
   end
 

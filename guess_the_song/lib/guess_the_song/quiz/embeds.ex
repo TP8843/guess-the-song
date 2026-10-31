@@ -121,7 +121,7 @@ defmodule GuessTheSong.Quiz.Embeds do
     }
   end
 
-  def round_end(guild_id, track, round_scores, scores) do
+  def round_end(track, round_scores, scores) do
     %Nostrum.Struct.Embed{
       title: "#{track.deezer.title}",
       author: %Nostrum.Struct.Embed.Author{
@@ -138,7 +138,7 @@ defmodule GuessTheSong.Quiz.Embeds do
       fields: [
         %Nostrum.Struct.Embed.Field{
           name: "Current Scores:",
-          value: generate_scores_string(guild_id, scores, round_scores),
+          value: generate_scores_string(scores, round_scores),
           inline: false
         }
       ],
@@ -149,24 +149,28 @@ defmodule GuessTheSong.Quiz.Embeds do
     }
   end
 
-  def generate_scores_string(guild_id, scores, round_scores \\ %{}) do
-    Enum.reduce(scores, "", fn {user_id, score}, acc ->
-      {:ok, user} = Nostrum.Cache.MemberCache.get(guild_id, user_id)
+  def generate_scores_string(scores, round_scores \\ %{})
 
+  # Discord rejects embed fields with an empty value
+  def generate_scores_string(scores, _round_scores) when map_size(scores) == 0,
+    do: "No points scored yet"
+
+  def generate_scores_string(scores, round_scores) do
+    Enum.reduce(scores, "", fn {user_id, score}, acc ->
       case Map.has_key?(round_scores, user_id) do
-        true -> acc <> "- **#{user.nick} - #{score}** (+#{round_scores[user_id]})\n"
-        false -> acc <> "- **#{user.nick} - #{score}**\n"
+        true -> acc <> "- <@#{user_id}> - **#{score}** (+#{round_scores[user_id]})\n"
+        false -> acc <> "- <@#{user_id}> - **#{score}**\n"
       end
     end)
   end
 
-  def game_end(guild_id, scores) do
+  def game_end(scores) do
     %Nostrum.Struct.Embed{
       title: "Game End",
       fields: [
         %Nostrum.Struct.Embed.Field{
           name: "Final Scores:",
-          value: generate_scores_string(guild_id, scores),
+          value: generate_scores_string(scores),
           inline: false
         }
       ],

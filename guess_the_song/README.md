@@ -1,21 +1,49 @@
 # GuessTheSong
 
-**TODO: Add description**
+A Discord bot that runs music quizzes in voice channels. It picks tracks from
+players' linked Last.fm libraries and plays Deezer previews for them to guess.
 
-## Installation
+## Requirements
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `guess_the_song` to your list of dependencies in `mix.exs`:
+- Erlang and Elixir (versions in `mise.toml`; run `mise install`)
+- `ffmpeg` (used for voice playback)
 
-```elixir
-def deps do
-  [
-    {:guess_the_song, "~> 0.1.0"}
-  ]
-end
+## Configuration
+
+Create a `.env` file in this directory (or export the variables):
+
+```bash
+BOT_TOKEN=...        # Discord bot token
+LASTFM_KEY=...       # Last.fm API key
+LASTFM_SECRET=...    # Last.fm API secret
+DATABASE=guess_the_song.db  # SQLite database path
+GUILD=...            # Optional: register commands to one server (faster updates while developing)
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/guess_the_song>.
+## Commands
 
+```bash
+mix deps.get         # Install dependencies
+mix ecto.create      # Create the SQLite database file
+mix ecto.migrate     # Create/update tables (safe to re-run)
+mix ecto.migrations  # Show which migrations have run
+
+iex -S mix           # Run the bot with an interactive shell
+mix run --no-halt    # Run the bot without a shell
+
+mix compile          # Compile and show warnings
+mix format           # Format the code
+mix test             # Run the tests
+```
+
+If `mix` isn't on your `PATH`, prefix commands with `mise exec --`.
+
+## Docker
+
+```bash
+docker build -t guess_the_song .
+docker run --env-file .env guess_the_song
+```
+
+The container runs migrations on startup. Point `DATABASE` at a mounted volume
+(writable by the `nobody` user) to keep data between restarts.
