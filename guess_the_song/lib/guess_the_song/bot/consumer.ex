@@ -4,9 +4,13 @@ defmodule GuessTheSong.Bot.Consumer do
   alias Nostrum.Api
 
   def handle_event({:READY, _data, _ws_state}) do
-    IO.puts("Bot is ready! Registering commands...")
-    GuessTheSong.Bot.Commands.register_all()
-    IO.puts("Commands registered!")
+    IO.puts("Bot is ready!")
+
+    case GuessTheSong.Bot.Commands.register_once() do
+      :ok -> IO.puts("Commands registered!")
+      :already_registered -> IO.puts("Commands already registered, skipping")
+      {:error, _reason} -> :ok
+    end
   end
 
   def handle_event({:VOICE_READY, %{guild_id: guild_id}, _ws_state}) do

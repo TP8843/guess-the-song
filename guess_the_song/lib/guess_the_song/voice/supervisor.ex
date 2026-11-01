@@ -38,14 +38,15 @@ defmodule GuessTheSong.Voice.Supervisor do
   end
 
   @doc """
-    Starts a voice session for the given guild and channel.
+    Starts a voice session for the given guild and channel. Sends `:voice_ready`
+    to `notify` once connected.
   """
-  def start_session(guild_id, channel_id) do
+  def start_session(guild_id, channel_id, notify) do
     case active?(guild_id) do
       false ->
         DynamicSupervisor.start_child(
           __MODULE__,
-          {GuessTheSong.Voice.Server, {guild_id, channel_id}}
+          {GuessTheSong.Voice.Server, {guild_id, channel_id, notify}}
         )
 
       true ->

@@ -20,6 +20,8 @@ defmodule GuessTheSong.Application do
       # {Nostrum.Bot, bot_options}
 
       {Registry, keys: :unique, name: GuessTheSong.Quiz.Registry},
+      # Runs slow work (Last.fm/Deezer fetches) for quiz servers
+      {Task.Supervisor, name: GuessTheSong.Quiz.TaskSupervisor},
       {GuessTheSong.Quiz.Supervisor, []},
       {Registry, keys: :unique, name: GuessTheSong.Voice.Registry},
       {GuessTheSong.Voice.Supervisor, []},

@@ -5,8 +5,9 @@ defmodule GuessTheSong.Voice.Server do
 
   # --- Public API ---
 
-  def start_link({guild_id, channel_id}) do
-    GenServer.start_link(__MODULE__, {guild_id, channel_id}, name: via(guild_id))
+  @doc "Joins the voice channel, sending `:voice_ready` to `notify` once connected."
+  def start_link({guild_id, channel_id, notify}) do
+    GenServer.start_link(__MODULE__, {guild_id, channel_id, notify}, name: via(guild_id))
   end
 
   @doc "Leaves the voice channel for the given guild."
@@ -29,18 +30,25 @@ defmodule GuessTheSong.Voice.Server do
   # --- GenServer callbacks ---
 
   @impl true
-  def init({guild_id, channel_id}) do
+  def init({guild_id, channel_id, notify}) do
     case Voice.join_channel(guild_id, channel_id, false, true, false) do
-      :ok -> {:ok, %{guild_id: guild_id, channel_id: channel_id}, {:continue, :wait_for_ready}}
-      {:error, reason} -> {:stop, reason}
+      :ok ->
+        {:ok, %{guild_id: guild_id, channel_id: channel_id, notify: notify},
+         {:continue, :wait_for_ready}}
+
+      {:error, reason} ->
+        {:stop, reason}
     end
   end
 
   @impl true
   def handle_continue(:wait_for_ready, state) do
     receive do
-      :voice_ready -> {:noreply, state}
-      after 10_000 -> {:stop, :voice_ready_timeout, state}
+      :voice_ready ->
+        send(state.notify, :voice_ready)
+        {:noreply, state}
+    after
+      10_000 -> {:stop, :voice_ready_timeout, state}
     end
   end
 
