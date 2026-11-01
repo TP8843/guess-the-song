@@ -123,6 +123,18 @@ defmodule GuessTheSong.Bot.Consumer do
             }
 
             Api.Interaction.edit_response(interaction, response)
+
+          # The quiz's `init` has already told the user nobody can play
+          {:error, :no_sources} ->
+            :ok
+
+          {:error, reason} ->
+            IO.inspect(reason, label: "Failed to start quiz")
+
+            Api.Interaction.edit_response(interaction, %{
+              type: 7,
+              embeds: [GuessTheSong.Quiz.Embeds.error("Oops. Couldn't start the quiz :(")]
+            })
         end
 
       {:error, :not_in_voice_channel} ->
@@ -132,6 +144,14 @@ defmodule GuessTheSong.Bot.Consumer do
         }
 
         Api.Interaction.edit_response(interaction, response)
+
+      {:error, :guild_not_found} ->
+        Api.Interaction.edit_response(interaction, %{
+          type: 7,
+          embeds: [
+            GuessTheSong.Quiz.Embeds.error("Couldn't find this server. Try again shortly.")
+          ]
+        })
     end
   end
 
@@ -175,6 +195,18 @@ defmodule GuessTheSong.Bot.Consumer do
           type: 4,
           data: %{content: "No quiz lobby is active.", flags: 64}
         })
+
+      # The join may still go through, and clicking again is safe
+      {:error, :timeout} ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{
+            content:
+              "The quiz is busy, so your join may not have gone through. " <>
+                "Check the lobby, or click Join again.",
+            flags: 64
+          }
+        })
     end
   end
 
@@ -214,6 +246,16 @@ defmodule GuessTheSong.Bot.Consumer do
         Api.Interaction.create_response(interaction, %{
           type: 4,
           data: %{content: "No quiz lobby is active.", flags: 64}
+        })
+
+      # The start may still go through
+      {:error, :timeout} ->
+        Api.Interaction.create_response(interaction, %{
+          type: 4,
+          data: %{
+            content: "The quiz is busy, so it may not have started. Try again in a moment.",
+            flags: 64
+          }
         })
     end
   end
@@ -255,6 +297,16 @@ defmodule GuessTheSong.Bot.Consumer do
       {:error, :not_found} ->
         :ok
     end
+  end
+
+  # The bot left voice (e.g. kicked, or the channel was deleted). Only the voice
+  # session is told; a quiz using it ends when the session stops.
+  def handle_event({:VOICE_STATE_UPDATE, %{channel_id: nil} = voice_state, _ws_state}) do
+    if voice_state.user_id == Nostrum.Cache.Me.get().id do
+      GuessTheSong.Voice.Server.disconnected(voice_state.guild_id)
+    end
+
+    :ok
   end
 
   def handle_event(_event), do: :ok

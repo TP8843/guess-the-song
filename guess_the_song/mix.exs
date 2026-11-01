@@ -26,7 +26,7 @@ defmodule GuessTheSong.MixProject do
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
       {:nostrum, github: "Kraigie/nostrum"},
       {:dotenvy, "~> 1.1"},
-      {:httpoison, "~> 3.0"},
+      {:req, "~> 0.5"},
       {:ecto, "~> 3.14"},
       {:ecto_sqlite3, "~> 0.21"}
     ]

@@ -21,6 +21,13 @@ defmodule GuessTheSong.Voice.Server do
   @doc "Stops the currently playing audio."
   def stop_audio(guild_id), do: GenServer.cast(via(guild_id), :stop_audio)
 
+  @doc """
+  Tells the session the bot is no longer in the voice channel (e.g. it was
+  kicked), so the session stops. Anything monitoring the session, like a quiz,
+  sees it go down.
+  """
+  def disconnected(guild_id), do: GenServer.cast(via(guild_id), :disconnected)
+
   # --- Private ---
 
   defp via(guild_id) do
@@ -67,6 +74,11 @@ defmodule GuessTheSong.Voice.Server do
   @impl true
   def handle_cast(:leave, state) do
     {:stop, :normal, state}
+  end
+
+  # A `:shutdown` reason, so it isn't logged as a crash
+  def handle_cast(:disconnected, state) do
+    {:stop, {:shutdown, :disconnected}, state}
   end
 
   @impl true

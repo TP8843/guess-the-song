@@ -14,20 +14,18 @@ defmodule GuessTheSong.Application do
       wrapped_token: fn -> Application.get_env(:guess_the_song, :token) end
     }
 
+    # Children start in order and stop in reverse order
     children = [
-      # Starts a worker by calling: GuessTheSong.Worker.start_link(arg)
-      # {GuessTheSong.Worker, arg}
-      # {Nostrum.Bot, bot_options}
-
+      # Start the database first, so it's ready before any Discord events arrive
+      {GuessTheSong.DB.Repo, []},
       {Registry, keys: :unique, name: GuessTheSong.Quiz.Registry},
       # Runs slow work (Last.fm/Deezer fetches) for quiz servers
       {Task.Supervisor, name: GuessTheSong.Quiz.TaskSupervisor},
       {GuessTheSong.Quiz.Supervisor, []},
       {Registry, keys: :unique, name: GuessTheSong.Voice.Registry},
       {GuessTheSong.Voice.Supervisor, []},
-      # GuessTheSong.Bot.Consumer
-      {Nostrum.Bot, bot_options},
-      {GuessTheSong.DB.Repo, []}
+      # Start the bot last, so everything its events use is already running
+      {Nostrum.Bot, bot_options}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

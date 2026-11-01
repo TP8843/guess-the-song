@@ -52,23 +52,32 @@ defmodule GuessTheSong.Api.Lastfm do
     end
   end
 
+  defp client do
+    Req.new(
+      base_url: "https://ws.audioscrobbler.com/2.0/",
+      params: [api_key: Application.get_env(:guess_the_song, :lastfm_key), format: "json"],
+      # Retries timeouts, 429s and 5xx errors. Two retries (about 1s, then 2s)
+      # keeps a failing API from holding up a round for long.
+      max_retries: 2
+    )
+  end
+
+  # Makes a Last.fm API request, returning the decoded JSON body. Error
+  # statuses (after retries) are returned as `{:error, {:http_status, status}}`.
+  defp request(params) do
+    case Req.get(client(), params: params) do
+      {:ok, %Req.Response{status: 200, body: body}} -> {:ok, body}
+      {:ok, %Req.Response{status: status}} -> {:error, {:http_status, status}}
+      {:error, exception} -> {:error, exception}
+    end
+  end
+
   def fetch_user(user) do
-    user = URI.encode(user)
-    token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
-
-    url =
-      "https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=#{user}&api_key=#{token}&format=json"
-
-    with {:ok, %{status_code: 200, body: body}} <- HTTPoison.get(url),
-         {:ok, body} <- Jason.decode(body),
-         %{"user" => user} <- body,
-         user <- User.parseJSON(user) do
-      {:ok, user}
+    with {:ok, %{"user" => user}} <- request(method: "user.getinfo", user: user) do
+      {:ok, User.parseJSON(user)}
     else
       # Handle user not found
-      {:ok, %{status_code: 404}} -> {:error, :not_found}
-      # Handle other errors
-      {:ok, %{status_code: status}} -> {:error, {:http_status, status}}
+      {:error, {:http_status, 404}} -> {:error, :not_found}
       {:error, reason} -> {:error, reason}
       _ -> {:error, :invalid_response}
     end
@@ -81,19 +90,10 @@ defmodule GuessTheSong.Api.Lastfm do
           String.t()
         ) :: {:ok, [Track.t()]} | {:error, any()}
   def fetch_top_tracks(user, limit, period) do
-    user = URI.encode(user)
-    period = URI.encode(period)
-    token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
+    params = [method: "user.gettoptracks", user: user, limit: limit, period: period]
 
-    url =
-      "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=#{limit}&period=#{period}&api_key=#{token}&format=json"
-
-    with {:ok, response} <- HTTPoison.get(url),
-         {:ok, body} <- Jason.decode(response.body),
-         %{"toptracks" => toptracks} <- body,
-         %{"track" => track} <- toptracks,
-         tracks <- track |> List.wrap() |> Enum.map(&Track.parseJSON/1) do
-      {:ok, tracks}
+    with {:ok, %{"toptracks" => %{"track" => track}}} <- request(params) do
+      {:ok, track |> List.wrap() |> Enum.map(&Track.parseJSON/1)}
     else
       {:error, reason} -> {:error, reason}
       _ -> {:error, :invalid_response}
@@ -118,20 +118,11 @@ defmodule GuessTheSong.Api.Lastfm do
           integer()
         ) :: {:ok, Track.t()} | {:error, any()}
   def fetch_top_track_from_index(user, period, index) do
-    user = URI.encode(user)
-    period = URI.encode(period)
-    token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
+    params = [method: "user.gettoptracks", user: user, limit: 1, page: index, period: period]
 
-    url =
-      "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&page=#{index}&period=#{period}&api_key=#{token}&format=json"
-
-    with {:ok, response} <- HTTPoison.get(url),
-         {:ok, body} <- Jason.decode(response.body),
-         %{"toptracks" => toptracks} <- body,
-         %{"track" => track} <- toptracks,
-         tracks <- track |> List.wrap() |> Enum.map(&Track.parseJSON/1),
-         [track | _] <- tracks do
-      {:ok, track}
+    with {:ok, %{"toptracks" => %{"track" => track}}} <- request(params),
+         [track | _] <- List.wrap(track) do
+      {:ok, Track.parseJSON(track)}
     else
       # Index is past the end of the user's top tracks
       [] -> {:error, :not_found}
@@ -141,17 +132,9 @@ defmodule GuessTheSong.Api.Lastfm do
   end
 
   def get_top_track_count(user, period) do
-    user = URI.encode(user)
-    period = URI.encode(period)
-    token = Application.get_env(:guess_the_song, :lastfm_key) |> URI.encode()
+    params = [method: "user.gettoptracks", user: user, limit: 1, period: period]
 
-    url =
-      "https://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=#{user}&limit=1&period=#{period}&api_key=#{token}&format=json"
-
-    with {:ok, response} <- HTTPoison.get(url),
-         %{body: body} <- response,
-         {:ok, decoded} <- Jason.decode(body),
-         %{"toptracks" => %{"@attr" => %{"total" => total}}} <- decoded,
+    with {:ok, %{"toptracks" => %{"@attr" => %{"total" => total}}}} <- request(params),
          {total_int, ""} <- Integer.parse(total) do
       {:ok, total_int}
     else

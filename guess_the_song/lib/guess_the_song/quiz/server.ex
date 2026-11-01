@@ -12,6 +12,10 @@ defmodule GuessTheSong.Quiz.Server do
   # close together share one edit
   @lobby_refresh_ms 1_000
 
+  # How long lobby button calls wait for the server. Discord needs a reply to a
+  # button click within 3 seconds, so this leaves time to send one.
+  @button_call_timeout_ms 2_000
+
   # How long a round lasts before it ends automatically (Deezer previews are 30s)
   @round_duration_ms 31_000
 
@@ -60,10 +64,13 @@ defmodule GuessTheSong.Quiz.Server do
   end
 
   # Calls the quiz server, returning an error instead of exiting if it stops
-  # before or during the call (e.g. a button clicked just as the quiz ends)
+  # before or during the call (e.g. a button clicked just as the quiz ends).
+  # A timeout means the quiz is still running but slow to reply, and it may
+  # still handle the request after we give up.
   defp safe_call(guild_id, message) do
-    GenServer.call(via(guild_id), message)
+    GenServer.call(via(guild_id), message, @button_call_timeout_ms)
   catch
+    :exit, {:timeout, _} -> {:error, :timeout}
     :exit, _ -> {:error, :not_active}
   end
 

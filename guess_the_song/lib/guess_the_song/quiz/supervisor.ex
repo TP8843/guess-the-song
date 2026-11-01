@@ -49,6 +49,12 @@ defmodule GuessTheSong.Quiz.Supervisor do
           {interaction, guild_id, text_channel_id, voice_channel_id, rounds, tracks_per_user,
            period}
         })
+        |> case do
+          # Another quiz started between the check above and now (e.g. two
+          # /start-quiz commands at once), and the Registry rejected this one
+          {:error, {:already_started, _pid}} -> {:error, :already_active}
+          result -> result
+        end
 
       true ->
         {:error, :already_active}

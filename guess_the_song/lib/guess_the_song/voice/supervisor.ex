@@ -48,6 +48,11 @@ defmodule GuessTheSong.Voice.Supervisor do
           __MODULE__,
           {GuessTheSong.Voice.Server, {guild_id, channel_id, notify}}
         )
+        |> case do
+          # Another session started between the check above and now
+          {:error, {:already_started, _pid}} -> {:error, :already_active}
+          result -> result
+        end
 
       true ->
         {:error, :already_active}

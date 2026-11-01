@@ -3,11 +3,11 @@ defmodule GuessTheSong.Api.Deezer do
     defstruct [:id, :name, :url, :role]
 
     @type t :: %__MODULE__{
-      id: String.t(),
-      name: String.t(),
-      url: String.t(),
-      role: :main | :feat
-    }
+            id: String.t(),
+            name: String.t(),
+            url: String.t(),
+            role: :main | :feat
+          }
 
     def parseJSON(json, main_artist \\ 0) do
       %__MODULE__{
@@ -23,13 +23,13 @@ defmodule GuessTheSong.Api.Deezer do
     defstruct [:id, :title, :artists, :url, :preview, :cover]
 
     @type t :: %__MODULE__{
-      id: String.t(),
-      title: String.t(),
-      artists: [Artist.t()],
-      url: String.t(),
-      preview: String.t(),
-      cover: String.t()
-    }
+            id: String.t(),
+            title: String.t(),
+            artists: [Artist.t()],
+            url: String.t(),
+            preview: String.t(),
+            cover: String.t()
+          }
 
     def parseJSON(json) do
       track = %__MODULE__{
@@ -41,55 +41,56 @@ defmodule GuessTheSong.Api.Deezer do
       }
 
       # Parse the full list of artists from json
-      artists = json["contributors"] |> Enum.map(fn artist -> Artist.parseJSON(artist, json["artist"]["id"]) end)
+      artists =
+        json["contributors"]
+        |> Enum.map(fn artist -> Artist.parseJSON(artist, json["artist"]["id"]) end)
+
       %{track | artists: artists}
     end
   end
 
   @doc "Finds a match for the given query using the Deezer API"
-  @spec find_match(GuessTheSong.Api.Lastfm.Track.t()) :: {:ok, map()} | {:error, any()}
+  @spec find_match(GuessTheSong.Api.Lastfm.Track.t()) :: {:ok, Track.t()} | {:error, any()}
   def find_match(lastfm_track) do
     query = "#{lastfm_track.title} #{lastfm_track.artist}"
 
-    with  {:ok, response} <- search_fuzzy(query),
-          %{body: body} <- response,
-          {:ok, decoded} <- Jason.decode(body),
-          %{"data" => tracks} <- decoded,
-          [head | _] <- tracks,
-          {:ok, response} <- fetch_track(head["id"]),
-          %{body: body} <- response,
-          {:ok, decoded} <- Jason.decode(body),
-          # Deezer returns errors as a 200 with an "error" body, so check it's a track
-          %{"contributors" => _} <- decoded,
-          track <- Track.parseJSON(decoded)
-    do
-      {:ok, track}
+    with {:ok, %{"data" => [head | _]}} <- search_fuzzy(query),
+         # Deezer returns errors as a 200 with an "error" body, so check it's a track
+         {:ok, %{"contributors" => _} = track} <- fetch_track(head["id"]) do
+      {:ok, Track.parseJSON(track)}
     else
+      {:ok, %{"data" => []}} -> {:error, :not_found}
       {:error, error} -> {:error, error}
-      [] -> {:error, :not_found}
       _ -> {:error, :invalid_response}
     end
   end
 
-  @spec search_fuzzy(String.t(), pos_integer()) :: HTTPoison.Response.t()
+  defp client do
+    # Retries timeouts, 429s and 5xx errors. Two retries (about 1s, then 2s)
+    # keeps a failing API from holding up a round for long.
+    Req.new(base_url: "https://api.deezer.com", max_retries: 2)
+  end
+
+  # Makes a Deezer API request, returning the decoded JSON body. Error
+  # statuses (after retries) are returned as `{:error, {:http_status, status}}`.
+  @spec request(String.t(), keyword()) :: {:ok, term()} | {:error, any()}
+  defp request(path, params \\ []) do
+    case Req.get(client(), url: path, params: params) do
+      {:ok, %Req.Response{status: 200, body: body}} -> {:ok, body}
+      {:ok, %Req.Response{status: status}} -> {:error, {:http_status, status}}
+      {:error, exception} -> {:error, exception}
+    end
+  end
+
   defp search_fuzzy(query, limit \\ 1) do
-    # encode_query escapes reserved characters like & and # that URI.encode leaves alone
-    params = URI.encode_query(q: query, limit: limit)
-    url = "https://api.deezer.com/search?#{params}"
-    HTTPoison.get(url)
+    request("/search", q: query, limit: limit)
   end
 
-  @spec search_exact(String.t(), String.t(), pos_integer()) :: HTTPoison.Response.t()
   defp search_exact(title, artist, limit \\ 1) do
-    search = "artist:\"#{artist}\",title:\"#{title}\""
-    params = URI.encode_query(q: search, limit: limit)
-    url = "https://api.deezer.com/search?#{params}"
-    HTTPoison.get(url)
+    request("/search", q: "artist:\"#{artist}\",title:\"#{title}\"", limit: limit)
   end
 
-  @spec fetch_track(String.t()) :: HTTPoison.Response.t()
   defp fetch_track(id) do
-    url = "https://api.deezer.com/track/#{id}"
-    HTTPoison.get(url)
+    request("/track/#{id}")
   end
 end
