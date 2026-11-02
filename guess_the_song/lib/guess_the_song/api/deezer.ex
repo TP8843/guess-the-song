@@ -69,6 +69,8 @@ defmodule GuessTheSong.Api.Deezer do
     # Retries timeouts, 429s and 5xx errors. Two retries (about 1s, then 2s)
     # keeps a failing API from holding up a round for long.
     Req.new(base_url: "https://api.deezer.com", max_retries: 2)
+    # Extra options from config, e.g. a Req.Test plug in tests
+    |> Req.merge(Application.get_env(:guess_the_song, :req_options, []))
   end
 
   # Makes a Deezer API request, returning the decoded JSON body. Error

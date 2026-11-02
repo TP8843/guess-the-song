@@ -7,6 +7,7 @@ defmodule GuessTheSong.MixProject do
       version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps()
     ]
   end
@@ -19,6 +20,10 @@ defmodule GuessTheSong.MixProject do
     ]
   end
 
+  # Compile test helpers (test/support) only in the test environment
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
@@ -28,7 +33,9 @@ defmodule GuessTheSong.MixProject do
       {:dotenvy, "~> 1.1"},
       {:req, "~> 0.5"},
       {:ecto, "~> 3.14"},
-      {:ecto_sqlite3, "~> 0.21"}
+      {:ecto_sqlite3, "~> 0.21"},
+      # Needed by Req.Test to stub HTTP responses in tests
+      {:plug, "~> 1.0", only: :test}
     ]
   end
 end

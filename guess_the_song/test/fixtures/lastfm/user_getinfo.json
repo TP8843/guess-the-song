@@ -1,0 +1,25 @@
+{
+  "user": {
+    "name": "testuser",
+    "age": "0",
+    "subscriber": "0",
+    "realname": "Test User",
+    "bootstrap": "0",
+    "playcount": "12345",
+    "artist_count": "678",
+    "playlists": "0",
+    "track_count": "2345",
+    "album_count": "901",
+    "image": [
+      { "size": "small", "#text": "https://lastfm.freetls.fastly.net/i/u/34s/abc.png" },
+      { "size": "medium", "#text": "https://lastfm.freetls.fastly.net/i/u/64s/abc.png" },
+      { "size": "large", "#text": "https://lastfm.freetls.fastly.net/i/u/174s/abc.png" },
+      { "size": "extralarge", "#text": "https://lastfm.freetls.fastly.net/i/u/300x300/abc.png" }
+    ],
+    "registered": { "unixtime": "1400000000", "#text": 1400000000 },
+    "country": "None",
+    "gender": "n",
+    "url": "https://www.last.fm/user/testuser",
+    "type": "user"
+  }
+}

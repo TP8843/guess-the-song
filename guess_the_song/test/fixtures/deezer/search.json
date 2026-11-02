@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "id": 67238735,
+      "readable": true,
+      "title": "Get Lucky (feat. Pharrell Williams and Nile Rodgers)",
+      "title_short": "Get Lucky",
+      "title_version": "(feat. Pharrell Williams and Nile Rodgers)",
+      "link": "https://www.deezer.com/track/67238735",
+      "duration": 369,
+      "rank": 900000,
+      "explicit_lyrics": false,
+      "preview": "https://cdnt-preview.dzcdn.net/api/1/1/a/b/c/0/getlucky.mp3",
+      "artist": {
+        "id": 27,
+        "name": "Daft Punk",
+        "link": "https://www.deezer.com/artist/27",
+        "type": "artist"
+      },
+      "album": {
+        "id": 6575789,
+        "title": "Random Access Memories",
+        "cover": "https://api.deezer.com/album/6575789/image",
+        "type": "album"
+      },
+      "type": "track"
+    }
+  ],
+  "total": 1,
+  "next": "https://api.deezer.com/search?q=get%20lucky&limit=1&index=1"
+}

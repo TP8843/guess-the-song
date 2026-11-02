@@ -60,6 +60,8 @@ defmodule GuessTheSong.Api.Lastfm do
       # keeps a failing API from holding up a round for long.
       max_retries: 2
     )
+    # Extra options from config, e.g. a Req.Test plug in tests
+    |> Req.merge(Application.get_env(:guess_the_song, :req_options, []))
   end
 
   # Makes a Last.fm API request, returning the decoded JSON body. Error

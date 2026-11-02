@@ -1,0 +1,53 @@
+{
+  "toptracks": {
+    "track": [
+      {
+        "streamable": { "fulltrack": "0", "#text": "0" },
+        "mbid": "",
+        "name": "Wonderwall",
+        "image": [
+          { "size": "small", "#text": "https://lastfm.freetls.fastly.net/i/u/34s/ww.png" },
+          { "size": "medium", "#text": "https://lastfm.freetls.fastly.net/i/u/64s/ww.png" },
+          { "size": "large", "#text": "https://lastfm.freetls.fastly.net/i/u/174s/ww.png" },
+          { "size": "extralarge", "#text": "https://lastfm.freetls.fastly.net/i/u/300x300/ww.png" }
+        ],
+        "artist": {
+          "url": "https://www.last.fm/music/Oasis",
+          "name": "Oasis",
+          "mbid": "39ab1aed-75e0-4140-bd47-540276886b60"
+        },
+        "url": "https://www.last.fm/music/Oasis/_/Wonderwall",
+        "duration": "258",
+        "@attr": { "rank": "1" },
+        "playcount": "42"
+      },
+      {
+        "streamable": { "fulltrack": "0", "#text": "0" },
+        "mbid": "",
+        "name": "Get Lucky (feat. Pharrell Williams & Nile Rodgers)",
+        "image": [
+          { "size": "small", "#text": "https://lastfm.freetls.fastly.net/i/u/34s/gl.png" },
+          { "size": "medium", "#text": "https://lastfm.freetls.fastly.net/i/u/64s/gl.png" },
+          { "size": "large", "#text": "https://lastfm.freetls.fastly.net/i/u/174s/gl.png" },
+          { "size": "extralarge", "#text": "https://lastfm.freetls.fastly.net/i/u/300x300/gl.png" }
+        ],
+        "artist": {
+          "url": "https://www.last.fm/music/Daft+Punk",
+          "name": "Daft Punk",
+          "mbid": "056e4f3e-d505-4dad-8ec1-d04f521cbb56"
+        },
+        "url": "https://www.last.fm/music/Daft+Punk/_/Get+Lucky+(feat.+Pharrell+Williams+&+Nile+Rodgers)",
+        "duration": "369",
+        "@attr": { "rank": "2" },
+        "playcount": "17"
+      }
+    ],
+    "@attr": {
+      "user": "testuser",
+      "totalPages": "1",
+      "page": "1",
+      "perPage": "50",
+      "total": "2"
+    }
+  }
+}
