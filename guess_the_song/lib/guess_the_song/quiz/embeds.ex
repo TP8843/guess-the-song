@@ -113,10 +113,15 @@ defmodule GuessTheSong.Quiz.Embeds do
     }
   end
 
-  def correct_guess(guess_element) do
+  # One reply for every part a single message guessed correctly
+  def correct_guesses(guess_elements) do
+    lines =
+      Enum.map_join(guess_elements, "\n", fn element ->
+        "**#{element.type}** is **#{element.string}** (+#{element.value})"
+      end)
+
     %Nostrum.Struct.Embed{
-      description:
-        "Correct! **#{guess_element.type}** is **#{guess_element.string}** (+#{guess_element.value})",
+      description: "Correct!\n" <> lines,
       color: 0x00F400
     }
   end

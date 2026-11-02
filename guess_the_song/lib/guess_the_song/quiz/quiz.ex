@@ -9,20 +9,21 @@ defmodule GuessTheSong.Quiz do
   alias GuessTheSong.Api
 
   @doc """
-    Loads a player's Last.fm user and how many of their top tracks to pick from.
+    Loads a player's Last.fm user and up to `max` of their top tracks for the
+    period, which the quiz picks from. Fetching the tracks up front means
+    rounds don't need to call Last.fm.
   """
-  @spec load_source(integer(), String.t(), integer()) ::
-          {:ok, {integer(), Api.Lastfm.User.t(), pos_integer()}} | {:error, any()}
-  def load_source(discord_id, lastfm_id, max) do
+  @spec load_source(integer(), String.t(), pos_integer(), String.t()) ::
+          {:ok, {integer(), Api.Lastfm.User.t(), [Api.Lastfm.Track.t()]}} | {:error, any()}
+  def load_source(discord_id, lastfm_id, max, period) do
     with {:ok, lastfm} <- Api.Lastfm.fetch_user(lastfm_id),
-         {:ok, count} <- Api.Lastfm.get_top_track_count(lastfm_id, "overall"),
-         IO.puts("Top track count: #{count}"),
-         # Skip empty libraries, since 1..0 counts down to [1, 0] rather than being empty
-         count when count > 0 <- min(max, count) do
-      {:ok, {discord_id, lastfm, count}}
+         {:ok, [_ | _] = tracks} <- Api.Lastfm.fetch_top_tracks(lastfm_id, max, period) do
+      IO.puts("Loaded #{length(tracks)} top tracks for #{lastfm_id}")
+      {:ok, {discord_id, lastfm, tracks}}
     else
+      # Nothing played in this period
+      {:ok, []} -> {:error, :no_tracks}
       {:error, reason} -> {:error, reason}
-      _ -> {:error, :no_tracks}
     end
   end
 
@@ -43,13 +44,12 @@ defmodule GuessTheSong.Quiz do
   end
 
   @doc """
-    Fetches the user's top track at the given index and finds its Deezer match.
+    Finds the Deezer match for one of the user's top tracks.
   """
-  @spec fetch_track(Api.Lastfm.User.t(), String.t(), integer()) ::
+  @spec fetch_track(Api.Lastfm.User.t(), Api.Lastfm.Track.t()) ::
           {:ok, Quiz.Track.t()} | {:error, any()}
-  def fetch_track(lastfm, period, index) do
-    with {:ok, lastfm_track} <- Api.Lastfm.fetch_top_track_from_index(lastfm.name, period, index),
-         {:ok, deezer} <- Api.Deezer.find_match(lastfm_track) do
+  def fetch_track(lastfm, lastfm_track) do
+    with {:ok, deezer} <- Api.Deezer.find_match(lastfm_track) do
       {:ok, Quiz.Track.create(lastfm, lastfm_track, deezer)}
     end
   end

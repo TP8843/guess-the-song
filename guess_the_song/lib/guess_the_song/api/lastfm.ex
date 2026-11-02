@@ -83,7 +83,10 @@ defmodule GuessTheSong.Api.Lastfm do
     end
   end
 
-  @doc "Fetches the top tracks for a given user, limit, and period"
+  @doc """
+  Fetches the top tracks for a given user, limit, and period. Last.fm allows a
+  limit of up to 1000 (higher returns a 400).
+  """
   @spec fetch_top_tracks(
           String.t(),
           integer(),
@@ -94,49 +97,6 @@ defmodule GuessTheSong.Api.Lastfm do
 
     with {:ok, %{"toptracks" => %{"track" => track}}} <- request(params) do
       {:ok, track |> List.wrap() |> Enum.map(&Track.parseJSON/1)}
-    else
-      {:error, reason} -> {:error, reason}
-      _ -> {:error, :invalid_response}
-    end
-  end
-
-  @doc "Fetches a random top track for a given user, limit, and period"
-  @spec fetch_random_top_track(
-          String.t(),
-          integer(),
-          String.t()
-        ) :: {:ok, Track.t()} | {:error, any()}
-  def fetch_random_top_track(user, limit, period) do
-    random_number = :rand.uniform(limit)
-    fetch_top_track_from_index(user, period, random_number)
-  end
-
-  @doc "Fetches top track for a given user, period, and index"
-  @spec fetch_top_track_from_index(
-          String.t(),
-          String.t(),
-          integer()
-        ) :: {:ok, Track.t()} | {:error, any()}
-  def fetch_top_track_from_index(user, period, index) do
-    params = [method: "user.gettoptracks", user: user, limit: 1, page: index, period: period]
-
-    with {:ok, %{"toptracks" => %{"track" => track}}} <- request(params),
-         [track | _] <- List.wrap(track) do
-      {:ok, Track.parseJSON(track)}
-    else
-      # Index is past the end of the user's top tracks
-      [] -> {:error, :not_found}
-      {:error, reason} -> {:error, reason}
-      _ -> {:error, :invalid_response}
-    end
-  end
-
-  def get_top_track_count(user, period) do
-    params = [method: "user.gettoptracks", user: user, limit: 1, period: period]
-
-    with {:ok, %{"toptracks" => %{"@attr" => %{"total" => total}}}} <- request(params),
-         {total_int, ""} <- Integer.parse(total) do
-      {:ok, total_int}
     else
       {:error, reason} -> {:error, reason}
       _ -> {:error, :invalid_response}

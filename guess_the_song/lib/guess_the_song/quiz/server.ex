@@ -3,7 +3,7 @@ defmodule GuessTheSong.Quiz.Server do
   # original interaction. `terminate` tells the players instead.
   use GenServer, restart: :temporary
 
-  alias Nostrum.Api.Message
+  alias GuessTheSong.Quiz.Sender
 
   # How long to wait in the lobby before auto-starting (milliseconds)
   @lobby_timeout_ms 60_000
@@ -21,6 +21,9 @@ defmodule GuessTheSong.Quiz.Server do
 
   # How many tracks to try before giving up on finding a Deezer match for a round
   @max_track_attempts 5
+
+  # How long to wait for one player's Last.fm library before skipping them
+  @source_load_timeout_ms 60_000
 
   def start_link(
         {interaction, guild_id, text_channel_id, voice_channel_id, rounds, tracks_per_user,
@@ -110,9 +113,13 @@ defmodule GuessTheSong.Quiz.Server do
           components: GuessTheSong.Quiz.Embeds.lobby_components()
         })
 
+        {:ok, sender} = Sender.start(self())
+
         {:ok,
          %{
            phase: :lobby,
+           # Posts this quiz's channel messages, so the quiz never waits on Discord
+           sender: sender,
            lobby: %{
              interaction: interaction,
              eligible: eligible,
@@ -140,6 +147,9 @@ defmodule GuessTheSong.Quiz.Server do
            scores: %{},
            # Background task for slow work (e.g. loading Last.fm libraries)
            task: nil,
+           # Result of fetching the next round's track during the current round
+           # (`{:ok, track}` or `{:error, reason}`), until the next round uses it
+           next_track: nil,
            # Monitors the voice session, so the quiz ends if it stops
            voice_ref: nil
          }}
@@ -207,53 +217,30 @@ defmodule GuessTheSong.Quiz.Server do
   def handle_cast({:process_message, msg}, %{phase: :playing} = state) do
     alias GuessTheSong.Quiz.Track.GuessElement
 
-    new_state =
-      Enum.reduce(state.round.track.guess_elements, state, fn guess_element, acc ->
-        if not guess_element.guessed and GuessElement.match?(guess_element, msg.content) do
-          Nostrum.Api.Message.create(state.info.text_channel_id,
-            embed: GuessTheSong.Quiz.Embeds.correct_guess(guess_element),
-            message_reference: %{message_id: msg.id}
-          )
-
-          acc =
-            update_in(acc, [:round, :track], fn track ->
-              %{
-                track
-                | guess_elements:
-                    Enum.map(track.guess_elements, fn element ->
-                      if element == guess_element do
-                        %{element | guessed: true, guessed_by: msg.author.id}
-                      else
-                        element
-                      end
-                    end)
-              }
-            end)
-
-          acc =
-            update_in(
-              acc,
-              [:round, :scores],
-              &Map.update(&1, msg.author.id, guess_element.value, fn value ->
-                value + guess_element.value
-              end)
-            )
-
-          acc =
-            update_in(acc, [:round, :track], fn track ->
-              %{track | correct_guesses: track.correct_guesses + 1}
-            end)
-
-          acc
-        else
-          acc
-        end
+    # Every part of the track this message guesses that nobody has got yet
+    matched =
+      Enum.filter(state.round.track.guess_elements, fn element ->
+        not element.guessed and GuessElement.match?(element, msg.content)
       end)
 
-    if new_state.round.track.correct_guesses == length(new_state.round.track.guess_elements) do
-      end_round(new_state)
-    else
-      {:noreply, new_state}
+    case matched do
+      [] ->
+        {:noreply, state}
+
+      _ ->
+        state = mark_guessed(state, matched, msg.author.id)
+
+        # One reply for everything this message got right
+        Sender.post(state.sender, state.info.text_channel_id,
+          embed: GuessTheSong.Quiz.Embeds.correct_guesses(matched),
+          message_reference: %{message_id: msg.id}
+        )
+
+        if Enum.all?(state.round.track.guess_elements, & &1.guessed) do
+          end_round(state)
+        else
+          {:noreply, state}
+        end
     end
   end
 
@@ -334,8 +321,8 @@ defmodule GuessTheSong.Quiz.Server do
       })
 
       sources =
-        Map.new(loaded, fn {_user, {discord_id, lastfm, count}} ->
-          {discord_id, %{lastfm: lastfm, choices: MapSet.new(1..count)}}
+        Map.new(loaded, fn {_user, {discord_id, lastfm, tracks}} ->
+          {discord_id, %{lastfm: lastfm, choices: tracks}}
         end)
 
       # Wait for `:voice_ready` before playing anything
@@ -368,25 +355,27 @@ defmodule GuessTheSong.Quiz.Server do
     loading_failed(%{state | task: nil}, "Oops. Something went wrong starting the quiz :(")
   end
 
-  # A track finished fetching
-  def handle_info({ref, {attempts, result}}, %{phase: :fetching, task: %Task{ref: ref}} = state) do
+  # A track finished fetching. This can be while a round waits on it
+  # (`:fetching`), or early, during the previous round.
+  def handle_info({ref, {attempts, result}}, %{phase: phase, task: %Task{ref: ref}} = state)
+      when phase in [:fetching, :playing, :between_rounds] do
     Process.demonitor(ref, [:flush])
     state = %{state | task: nil}
 
     case result do
-      {:ok, track} -> start_round(state, track)
-      # Track missing on Last.fm or Deezer, so try a different one
-      {:error, :not_found} -> fetch_next_track(state, attempts + 1)
-      {:error, reason} -> skip_round(state, reason)
+      # Track missing on Deezer, so try a different one
+      {:error, :not_found} -> start_fetch(state, attempts + 1)
+      result -> track_fetched(state, result)
     end
   end
 
-  # The fetch task crashed, so skip this round
+  # The fetch task crashed, so that round will be skipped
   def handle_info(
         {:DOWN, ref, :process, _pid, reason},
-        %{phase: :fetching, task: %Task{ref: ref}} = state
-      ) do
-    skip_round(%{state | task: nil}, {:fetch_crashed, reason})
+        %{phase: phase, task: %Task{ref: ref}} = state
+      )
+      when phase in [:fetching, :playing, :between_rounds] do
+    track_fetched(%{state | task: nil}, {:error, {:fetch_crashed, reason}})
   end
 
   # The voice session stopped (e.g. it timed out waiting to connect)
@@ -399,7 +388,7 @@ defmodule GuessTheSong.Quiz.Server do
         loading_failed(state, "Couldn't join the voice channel")
 
       _ ->
-        Message.create(state.info.text_channel_id,
+        Sender.post(state.sender, state.info.text_channel_id,
           embed:
             GuessTheSong.Quiz.Embeds.error("Lost the voice connection, so the quiz has ended")
         )
@@ -440,10 +429,36 @@ defmodule GuessTheSong.Quiz.Server do
     })
   end
 
+  # Marks the matched parts as guessed by this user, and adds their points to
+  # the round scores
+  defp mark_guessed(state, matched, user_id) do
+    points = matched |> Enum.map(& &1.value) |> Enum.sum()
+
+    state
+    |> update_in([:round, :track], fn track ->
+      elements =
+        Enum.map(track.guess_elements, fn element ->
+          if element in matched,
+            do: %{element | guessed: true, guessed_by: user_id},
+            else: element
+        end)
+
+      %{
+        track
+        | guess_elements: elements,
+          correct_guesses: track.correct_guesses + length(matched)
+      }
+    end)
+    |> update_in(
+      [:round, :scores],
+      &Map.update(&1, user_id, points, fn score -> score + points end)
+    )
+  end
+
   # Picks a random unplayed track and removes it from its source's choices
   defp pick_track(state) do
     # Only pick from sources that still have unplayed tracks
-    available = Enum.filter(state.sources, fn {_, source} -> MapSet.size(source.choices) > 0 end)
+    available = Enum.filter(state.sources, fn {_, source} -> source.choices != [] end)
 
     case available do
       [] ->
@@ -451,10 +466,11 @@ defmodule GuessTheSong.Quiz.Server do
 
       _ ->
         {discord_id, source} = Enum.random(available)
-        track = Enum.random(source.choices)
 
-        new_state =
-          update_in(state, [:sources, discord_id, :choices], &(&1 |> MapSet.delete(track)))
+        {track, remaining} =
+          List.pop_at(source.choices, :rand.uniform(length(source.choices)) - 1)
+
+        new_state = put_in(state, [:sources, discord_id, :choices], remaining)
 
         {:ok, {discord_id, source.lastfm, track}, new_state}
     end
@@ -462,35 +478,56 @@ defmodule GuessTheSong.Quiz.Server do
 
   # Starts the next round, or ends the quiz after the last one
   defp next_round(state) do
-    if state.round.number >= state.info.rounds do
-      {:stop, :normal, state}
-    else
-      fetch_next_track(state, 0)
+    cond do
+      state.round.number >= state.info.rounds ->
+        {:stop, :normal, state}
+
+      # Fetched during the previous round
+      state.next_track != nil ->
+        use_track(%{state | next_track: nil}, state.next_track)
+
+      # Still being fetched, so wait for it (see `track_fetched/2`)
+      state.task != nil ->
+        {:noreply, %{state | phase: :fetching}}
+
+      # Nothing fetched yet (e.g. the first round)
+      true ->
+        start_fetch(%{state | phase: :fetching}, 0)
     end
   end
 
-  # Picks a track and starts fetching it, giving up after too many missing tracks
-  defp fetch_next_track(state, attempts) when attempts >= @max_track_attempts do
-    skip_round(state, :no_match)
+  # Picks a track and starts fetching it, giving up after too many missing
+  # tracks. Leaves the phase alone, so it works both for a round waiting on
+  # the track (`:fetching`) and for fetching ahead during a round.
+  defp start_fetch(state, attempts) when attempts >= @max_track_attempts do
+    track_fetched(state, {:error, :no_match})
   end
 
-  defp fetch_next_track(state, attempts) do
+  defp start_fetch(state, attempts) do
     case pick_track(state) do
-      {:ok, {_discord_id, lastfm, index}, state} ->
-        period = state.info.period
-
+      {:ok, {_discord_id, lastfm, lastfm_track}, state} ->
         task =
           Task.Supervisor.async_nolink(GuessTheSong.Quiz.TaskSupervisor, fn ->
-            {attempts, GuessTheSong.Quiz.fetch_track(lastfm, period, index)}
+            {attempts, GuessTheSong.Quiz.fetch_track(lastfm, lastfm_track)}
           end)
 
-        {:noreply, %{state | phase: :fetching, task: task}}
+        {:noreply, %{state | task: task}}
 
-      # Every source has run out of tracks, so end the quiz early
       {:error, :no_tracks} ->
-        {:stop, :normal, state}
+        track_fetched(state, {:error, :no_tracks})
     end
   end
+
+  # A round is waiting on this track, so use it now
+  defp track_fetched(%{phase: :fetching} = state, result), do: use_track(state, result)
+
+  # Fetched early, so keep it until the next round starts
+  defp track_fetched(state, result), do: {:noreply, %{state | next_track: result}}
+
+  defp use_track(state, {:ok, track}), do: start_round(state, track)
+  # Every source has run out of tracks, so end the quiz early
+  defp use_track(state, {:error, :no_tracks}), do: {:stop, :normal, state}
+  defp use_track(state, {:error, reason}), do: skip_round(state, reason)
 
   # Counts the round as played without playing anything, then moves on
   defp skip_round(state, reason) do
@@ -511,17 +548,20 @@ defmodule GuessTheSong.Quiz.Server do
       timer_ref: timer_ref
     }
 
-    {:noreply, %{state | phase: :playing, round: new_round}}
+    state = %{state | phase: :playing, round: new_round}
+
+    if number < state.info.rounds do
+      # Fetch the next round's track while this one plays
+      start_fetch(state, 0)
+    else
+      {:noreply, state}
+    end
   end
 
+  # Doesn't wait for playback to start. Failures are logged by `Voice.Server`,
+  # and a stopped voice session is handled by the `:DOWN` handler.
   defp play_track(guild_id, track) do
-    case GuessTheSong.Voice.Server.play_audio(guild_id, track.deezer.preview, :url, volume: 0.4) do
-      :ok -> :ok
-      {:error, reason} -> IO.inspect(reason, label: "Failed to play track")
-    end
-  catch
-    # Voice session stopped, which the `:DOWN` handler deals with
-    :exit, reason -> IO.inspect(reason, label: "Failed to play track")
+    GuessTheSong.Voice.Server.play_audio(guild_id, track.deezer.preview, :url, volume: 0.4)
   end
 
   defp end_round(state) do
@@ -539,7 +579,7 @@ defmodule GuessTheSong.Quiz.Server do
         end)
       )
 
-    Nostrum.Api.Message.create(state.info.text_channel_id,
+    Sender.post(state.sender, state.info.text_channel_id,
       content: "Round End",
       embed:
         GuessTheSong.Quiz.Embeds.round_end(
@@ -589,10 +629,11 @@ defmodule GuessTheSong.Quiz.Server do
 
       participants ->
         tracks_per_user = info.tracks_per_user
+        period = info.period
 
         task =
           Task.Supervisor.async_nolink(GuessTheSong.Quiz.TaskSupervisor, fn ->
-            load_sources(participants, tracks_per_user)
+            load_sources(participants, tracks_per_user, period)
           end)
 
         {:ok, %{state | phase: :loading, task: task}}
@@ -600,17 +641,35 @@ defmodule GuessTheSong.Quiz.Server do
   end
 
   # Runs in a task. Returns `{user, source}` for each player whose Last.fm
-  # library loaded, skipping the rest.
-  defp load_sources(participants, tracks_per_user) do
-    Enum.flat_map(participants, fn user ->
-      case GuessTheSong.Quiz.load_source(user.discord_id, user.lastfm_username, tracks_per_user) do
-        {:ok, source} ->
-          [{user, source}]
+  # library loaded, skipping the rest. Players load in parallel, since a full
+  # 1000-track library takes a few seconds to fetch.
+  defp load_sources(participants, tracks_per_user, period) do
+    participants
+    |> Task.async_stream(
+      fn user ->
+        GuessTheSong.Quiz.load_source(
+          user.discord_id,
+          user.lastfm_username,
+          tracks_per_user,
+          period
+        )
+      end,
+      max_concurrency: 4,
+      timeout: @source_load_timeout_ms,
+      on_timeout: :kill_task
+    )
+    |> Enum.zip(participants)
+    |> Enum.flat_map(fn
+      {{:ok, {:ok, source}}, user} ->
+        [{user, source}]
 
-        {:error, reason} ->
-          IO.inspect(reason, label: "Failed to add source #{user.lastfm_username}")
-          []
-      end
+      {{:ok, {:error, reason}}, user} ->
+        IO.inspect(reason, label: "Failed to add source #{user.lastfm_username}")
+        []
+
+      {{:exit, reason}, user} ->
+        IO.inspect(reason, label: "Failed to add source #{user.lastfm_username}")
+        []
     end)
   end
 
@@ -631,14 +690,16 @@ defmodule GuessTheSong.Quiz.Server do
     # Don't leave a task running for a quiz that has ended
     if state.task, do: Task.shutdown(state.task, :brutal_kill)
 
+    # Through the sender, so these come after any messages still queued (like
+    # the last "Round End"). The sender sends them after this process stops.
     if crashed?(reason) do
-      Message.create(state.info.text_channel_id,
+      Sender.post(state.sender, state.info.text_channel_id,
         embed: GuessTheSong.Quiz.Embeds.error("Oops. Something went wrong running the quiz :(")
       )
     end
 
     if map_size(state.scores) > 0 do
-      Nostrum.Api.Message.create(state.info.text_channel_id,
+      Sender.post(state.sender, state.info.text_channel_id,
         embed: GuessTheSong.Quiz.Embeds.game_end(state.scores)
       )
     end

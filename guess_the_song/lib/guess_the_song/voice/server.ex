@@ -13,9 +13,12 @@ defmodule GuessTheSong.Voice.Server do
   @doc "Leaves the voice channel for the given guild."
   def leave(guild_id), do: GenServer.cast(via(guild_id), :leave)
 
-  @doc "Plays audio in the voice channel. Type is a Nostrum play type e.g. :url, :ytdl."
+  @doc """
+  Plays audio in the voice channel. Type is a Nostrum play type e.g. :url,
+  :ytdl. Returns straight away; a failure to play is logged.
+  """
   def play_audio(guild_id, input, type \\ :url, opts \\ []) do
-    GenServer.call(via(guild_id), {:play_audio, input, type, opts})
+    GenServer.cast(via(guild_id), {:play_audio, input, type, opts})
   end
 
   @doc "Stops the currently playing audio."
@@ -60,12 +63,15 @@ defmodule GuessTheSong.Voice.Server do
   end
 
   @impl true
-  def handle_call({:play_audio, input, type, opts}, _from, state) do
-    result = Voice.play(state.guild_id, input, type, opts)
-    {:reply, result, state}
+  def handle_cast({:play_audio, input, type, opts}, state) do
+    case Voice.play(state.guild_id, input, type, opts) do
+      {:error, reason} -> IO.inspect(reason, label: "Failed to play audio")
+      _ -> :ok
+    end
+
+    {:noreply, state}
   end
 
-  @impl true
   def handle_cast(:stop_audio, state) do
     Voice.stop(state.guild_id)
     {:noreply, state}
