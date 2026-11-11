@@ -53,32 +53,8 @@ defmodule GuessTheSong.Quiz.Track do
       end
     end
 
-    # Removes the parts of a title that describe the version rather than the song
-    @spec strip_version_info(String.t()) :: String.t()
-    def strip_version_info(title) do
-      title
-      # "(Remix)", "[Live]", "(feat. X)"
-      |> String.replace(~r/[(\[][^)\]]*[)\]]/u, "")
-      # "- Remastered 2011". Needs spaces around the dash, so "Jay-Z" is kept.
-      |> String.replace(~r/\s+[-–—]\s.*$/u, "")
-      # "feat. X" without brackets
-      |> String.replace(~r/\s+(feat\.?|ft\.|featuring)\s.*$/iu, "")
-      |> String.trim()
-    end
-
-    @spec normalize_text(String.t()) :: String.t()
-    def normalize_text(text) do
-      text
-      |> String.normalize(:nfd)
-      # Remove accents, which NFD splits off from their letters
-      |> String.replace(~r/\p{Mn}/u, "")
-      |> String.downcase()
-      |> String.replace("&", " and ")
-      |> String.replace(~r/[\p{P}\p{S}]/u, "")
-      |> String.replace(~r/\s+/u, " ")
-      |> String.trim()
-      |> String.replace(~r/^the /u, "")
-    end
+    defdelegate strip_version_info(title), to: GuessTheSong.Helpers.Text
+    defdelegate normalize_text(text), to: GuessTheSong.Helpers.Text, as: :normalize
   end
 
   alias GuessTheSong.Api
