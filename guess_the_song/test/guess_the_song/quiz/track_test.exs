@@ -125,3 +125,51 @@ defmodule GuessTheSong.Quiz.TrackTest do
     end
   end
 end
+
+defmodule GuessTheSong.Quiz.TrackVolumeTest do
+  use ExUnit.Case, async: true
+
+  alias GuessTheSong.Api.Deezer
+  alias GuessTheSong.Quiz.Track
+
+  defp track(gain), do: %Track{deezer: %Deezer.Track{gain: gain}}
+
+  # Decibels between two volumes
+  defp db(volume), do: 20 * :math.log10(volume)
+
+  describe "volume/1" do
+    test "plays an average track at about the old fixed volume" do
+      assert_in_delta Track.volume(track(-11.0)), 0.4, 0.01
+    end
+
+    test "turns loud tracks down" do
+      assert_in_delta Track.volume(track(-5.0)), 0.2, 0.01
+    end
+
+    test "turns quiet tracks up" do
+      assert_in_delta Track.volume(track(-16.2)), 0.72, 0.01
+    end
+
+    test "evens out the difference in loudness between tracks" do
+      loud = track(-5.0)
+      quiet = track(-16.0)
+
+      # 11 dB louder at the source, so 11 dB quieter in volume
+      assert_in_delta db(Track.volume(loud)) - db(Track.volume(quiet)), -11.0, 0.01
+    end
+
+    test "doesn't boost very quiet tracks above full volume" do
+      assert Track.volume(track(-19.0)) == 1.0
+      assert Track.volume(track(-30.0)) == 1.0
+    end
+
+    test "accepts integer gains" do
+      assert_in_delta Track.volume(track(-5)), 0.2, 0.01
+    end
+
+    test "uses the default volume when the gain is missing" do
+      assert Track.volume(track(nil)) == 0.4
+      assert Track.volume(track("not a number")) == 0.4
+    end
+  end
+end

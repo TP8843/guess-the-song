@@ -105,6 +105,25 @@ defmodule GuessTheSong.Quiz.Track do
           deezer: Api.Deezer.Track.t()
         }
 
+  # Loudness every track is played at (LUFS). Around -19 keeps an average
+  # track (about -11 LUFS) as loud as the old fixed volume of 0.4.
+  @target_loudness -19.0
+  # Used when Deezer doesn't give a track's loudness
+  @default_volume 0.4
+  # Quieter tracks aren't boosted above full volume, which would clip
+  @max_volume 1.0
+
+  @doc """
+  The volume to play the track at so every track sounds about as loud,
+  based on Deezer's `gain` (the track's loudness in LUFS).
+  """
+  @spec volume(t) :: float()
+  def volume(%__MODULE__{deezer: %{gain: gain}}) when is_number(gain) do
+    min(:math.pow(10, (@target_loudness - gain) / 20), @max_volume)
+  end
+
+  def volume(%__MODULE__{}), do: @default_volume
+
   @spec create(Api.Lastfm.User.t(), Api.Lastfm.Track.t(), Api.Deezer.Track.t()) :: t
   def create(source, lastfm, deezer) do
     guess_elements =

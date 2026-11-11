@@ -565,7 +565,9 @@ defmodule GuessTheSong.Quiz.Server do
   # Doesn't wait for playback to start. Failures are logged by `Voice.Server`,
   # and a stopped voice session is handled by the `:DOWN` handler.
   defp play_track(guild_id, track) do
-    GuessTheSong.Voice.Server.play_audio(guild_id, track.deezer.preview, :url, volume: 0.4)
+    GuessTheSong.Voice.Server.play_audio(guild_id, track.deezer.preview, :url,
+      volume: GuessTheSong.Quiz.Track.volume(track)
+    )
   end
 
   defp end_round(state) do

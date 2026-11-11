@@ -20,15 +20,18 @@ defmodule GuessTheSong.Api.Deezer do
   end
 
   defmodule Track do
-    defstruct [:id, :title, :artists, :url, :preview, :cover]
+    defstruct [:id, :title, :artists, :url, :preview, :cover, :gain]
 
+    # `gain` isn't documented by Deezer, but matches the track's loudness in
+    # LUFS (e.g. -5 for loud EDM, -16 for quiet acoustic). See `Quiz.Track.volume/1`.
     @type t :: %__MODULE__{
             id: String.t(),
             title: String.t(),
             artists: [Artist.t()],
             url: String.t(),
             preview: String.t(),
-            cover: String.t()
+            cover: String.t(),
+            gain: number() | nil
           }
 
     def parseJSON(json) do
@@ -37,7 +40,8 @@ defmodule GuessTheSong.Api.Deezer do
         title: json["title"],
         url: json["link"],
         preview: json["preview"],
-        cover: json["album"]["cover"]
+        cover: json["album"]["cover"],
+        gain: json["gain"]
       }
 
       # Parse the full list of artists from json

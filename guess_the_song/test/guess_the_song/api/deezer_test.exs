@@ -46,6 +46,7 @@ defmodule GuessTheSong.Api.DeezerTest do
     assert track.url == "https://www.deezer.com/track/67238735"
     assert track.preview == "https://cdnt-preview.dzcdn.net/api/1/1/a/b/c/0/getlucky.mp3"
     assert track.cover == "https://api.deezer.com/album/6575789/image"
+    assert track.gain == -9.1
   end
 
   test "marks the track's artist as main and other contributors as featured" do
