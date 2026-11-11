@@ -19,6 +19,10 @@ defmodule GuessTheSong.Quiz.Server do
   # How long a round lasts before it ends automatically (Deezer previews are 30s)
   @round_duration_ms 31_000
 
+  # How long to wait after a round ends before the next one starts, so players
+  # can read the results
+  @between_rounds_ms 5_000
+
   # How many tracks to try before giving up on finding a Deezer match for a round
   @max_track_attempts 5
 
@@ -579,8 +583,10 @@ defmodule GuessTheSong.Quiz.Server do
         end)
       )
 
+    last_round? = state.round.number >= state.info.rounds
+
     Sender.post(state.sender, state.info.text_channel_id,
-      content: "Round End",
+      content: round_end_content(last_round?),
       embed:
         GuessTheSong.Quiz.Embeds.round_end(
           state.round.track,
@@ -589,13 +595,22 @@ defmodule GuessTheSong.Quiz.Server do
         )
     )
 
-    if state.round.number >= state.info.rounds do
+    if last_round? do
       {:stop, :normal, state}
     else
       # Short pause before the next round's audio
-      Process.send_after(self(), :next_round, 1000)
+      Process.send_after(self(), :next_round, @between_rounds_ms)
       {:noreply, %{state | phase: :between_rounds}}
     end
+  end
+
+  defp round_end_content(true = _last_round?), do: "Round End"
+
+  # Discord shows `<t:UNIX:R>` as a live countdown ("in 5 seconds"), so the
+  # message never needs editing
+  defp round_end_content(false = _last_round?) do
+    next_round_at = System.os_time(:second) + div(@between_rounds_ms + 999, 1000)
+    "Round End · Next round <t:#{next_round_at}:R>"
   end
 
   defp launch_quiz(%{phase: :lobby} = state) do
