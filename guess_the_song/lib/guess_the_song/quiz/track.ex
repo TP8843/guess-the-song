@@ -28,15 +28,51 @@ defmodule GuessTheSong.Quiz.Track do
       }
     end
 
+    # Minimum similarity between a guess (or part of one) and an answer
+    @min_similarity 0.8
+    # Answers shorter than this, like "Yes", "Air" or "U2", only match inside a
+    # longer message when spelled exactly, since one typo is a big change to a
+    # short word
+    @min_length_for_typos 4
+
     @spec match?(t, String.t()) :: boolean()
-    @doc "Checks if the guess matches the guess element."
+    @doc """
+    Checks if the guess matches the guess element. An answer can be the whole
+    message or any run of words inside it, so one message like
+    "wonderwall oasis" can match several guess elements.
+    """
     def match?(guess_element, guess) do
       normalized_guess = normalize_text(guess)
 
       normalized_guess != "" and
         Enum.any?(guess_element.answers, fn answer ->
-          GuessTheSong.Helpers.Levenshtein.levenshtein_ratio(normalized_guess, answer) >= 0.8
+          similar?(normalized_guess, answer) or in_message?(normalized_guess, answer)
         end)
+    end
+
+    defp similar?(text, answer) do
+      GuessTheSong.Helpers.Levenshtein.levenshtein_ratio(text, answer) >= @min_similarity
+    end
+
+    # Compares the answer with every run of words in the message of about the
+    # same length. Runs one word shorter or longer catch guesses that join or
+    # split a word, e.g. "wonder wall" or "bohemianrhapsody".
+    defp in_message?(normalized_guess, answer) do
+      words = String.split(normalized_guess, " ")
+      answer_words = answer |> String.split(" ") |> length()
+
+      if String.length(answer) < @min_length_for_typos do
+        words
+        |> Enum.chunk_every(answer_words, 1, :discard)
+        |> Enum.any?(&(Enum.join(&1, " ") == answer))
+      else
+        max(answer_words - 1, 1)..(answer_words + 1)
+        |> Enum.any?(fn size ->
+          words
+          |> Enum.chunk_every(size, 1, :discard)
+          |> Enum.any?(&similar?(Enum.join(&1, " "), answer))
+        end)
+      end
     end
 
     defp answers(string, strip_version?) do

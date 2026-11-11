@@ -74,4 +74,54 @@ defmodule GuessTheSong.Quiz.TrackTest do
       refute GuessElement.match?(title("Song"), "")
     end
   end
+
+  describe "match?/2 with longer messages" do
+    test "finds the title and the artist in one message" do
+      assert GuessElement.match?(title("Wonderwall"), "wonderwall oasis")
+      assert GuessElement.match?(artist("Oasis"), "wonderwall oasis")
+    end
+
+    test "finds an answer inside a sentence" do
+      assert GuessElement.match?(title("Wonderwall"), "is it wonderwall?")
+      assert GuessElement.match?(title("Bohemian Rhapsody"), "surely this is bohemian rhapsody")
+      assert GuessElement.match?(artist("The Killers"), "i think it's the killers")
+    end
+
+    test "finds titles without version info inside a sentence" do
+      assert GuessElement.match?(title("Wonderwall - Remastered 2014"), "wonderwall by oasis")
+    end
+
+    test "allows small typos inside a sentence" do
+      assert GuessElement.match?(title("Bohemian Rhapsody"), "is it bohemian rapsody")
+      assert GuessElement.match?(artist("Oasis"), "wonderwall oassis")
+    end
+
+    test "allows joined or split words inside a sentence" do
+      assert GuessElement.match?(title("Wonderwall"), "its wonder wall")
+      assert GuessElement.match?(title("Bohemian Rhapsody"), "bohemianrhapsody by queen")
+    end
+
+    test "doesn't match part of a multi-word answer" do
+      refute GuessElement.match?(title("Bohemian Rhapsody"), "something bohemian")
+      refute GuessElement.match?(title("Hey Jude"), "hey you guys")
+    end
+
+    test "doesn't match unrelated messages" do
+      refute GuessElement.match?(title("Wonderwall"), "no idea what this is")
+      refute GuessElement.match?(artist("Oasis"), "sounds like the nineties")
+    end
+
+    test "matches short answers inside a message when spelled exactly" do
+      assert GuessElement.match?(artist("Air"), "air")
+      assert GuessElement.match?(artist("Yes"), "Yes!")
+      assert GuessElement.match?(artist("Sia"), "sia chandelier")
+      assert GuessElement.match?(artist("U2"), "u2 maybe")
+    end
+
+    test "doesn't allow typos in short answers inside a message" do
+      refute GuessElement.match?(artist("Sia"), "sai chandelier")
+      refute GuessElement.match?(artist("Air"), "a fair guess")
+      refute GuessElement.match?(artist("U2"), "u 2 maybe")
+    end
+  end
 end
